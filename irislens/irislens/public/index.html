@@ -38,13 +38,26 @@ const HOLD_MS = 1200;
 const ALIGN_TOL = 0.1;
 const CROP = 512;
 function classifyColor(h, s, l) {
-  if (l < 0.18) return "dark brown";
-  if (l < 0.32 && (h < 40 || h > 330)) return "brown";
-  if (h >= 35 && h < 55 && s > 0.3) return "amber";
-  if (h >= 55 && h < 90 && s > 0.18) return "hazel";
-  if (h >= 90 && h < 165) return "green";
-  if (h >= 165 && h < 205) return "blue-gray";
-  if (h >= 205 && h < 255) return "blue";
+  // Achromatic — check before anything else
+  if (l < 0.14) return "dark brown";
+  if (s < 0.07) return "gray";
+  // Warm / brown family
+  if (h < 40 || h > 330) {
+    if (l < 0.28) return "dark brown";
+    return "brown";
+  }
+  // Amber — warm yellow-orange, must have meaningful saturation
+  if (h >= 40 && h < 62 && s > 0.26) return "amber";
+  // Hazel — yellow-green range
+  if (h >= 55 && h < 95 && s > 0.1) return "hazel";
+  // Green
+  if (h >= 95 && h < 168) return "green";
+  // Blue-gray — cyan-blue boundary, lower saturation
+  if (h >= 168 && h < 205) return s < 0.2 ? "blue-gray" : "blue-gray";
+  // True blue — even light blue eyes have hue clearly above 200
+  // Keep blue-gray only if saturation is really low
+  if (h >= 205 && h < 265) return s < 0.11 ? "blue-gray" : "blue";
+  // Low-sat fallback
   if (s < 0.12) return "gray";
   return "brown";
 }
@@ -409,27 +422,89 @@ function IrisLens() {
     c.height = CROP;
     const ctx = c.getContext("2d");
     ctx.drawImage(video, cxPx - radPx, cyPx - radPx, radPx * 2, radPx * 2, 0, 0, CROP, CROP);
-    const img = ctx.getImageData(0, 0, CROP, CROP).data;
+    const d = ctx.getImageData(0, 0, CROP, CROP).data;
     const cxp = CROP / 2,
-      cyp = CROP / 2,
-      innerR = CROP * 0.18;
-    let hs = 0,
-      ss = 0,
-      ls = 0,
-      n = 0;
-    for (let y = 0; y < CROP; y += 2) for (let x = 0; x < CROP; x += 2) {
+      cyp = CROP / 2;
+    // Iris radius in the crop: crop spans pad*2*irisRadius, so irisR = CROP/(2*pad)
+    const irisR = CROP / (2 * 3.2); // ~80px
+
+    // ── 1. Sclera white-balance correction ───────────────────────────────────
+    // Bright pixels outside the iris = sclera = should be near-white
+    let sr = 0,
+      sg = 0,
+      sb = 0,
+      sn = 0;
+    for (let y = 0; y < CROP; y += 4) for (let x = 0; x < CROP; x += 4) {
       const dx = x - cxp,
-        dy = y - cyp;
-      if (dx * dx + dy * dy < innerR * innerR) {
-        const i = (y * CROP + x) * 4;
-        const [h, s, l] = rgbToHsl(img[i], img[i + 1], img[i + 2]);
-        hs += h;
-        ss += s;
-        ls += l;
-        n++;
+        dy = y - cyp,
+        dist = Math.sqrt(dx * dx + dy * dy);
+      if (dist > irisR * 1.15 && dist < irisR * 2.1) {
+        const i = (y * CROP + x) * 4,
+          r = d[i],
+          g = d[i + 1],
+          b = d[i + 2];
+        if ((r + g + b) / 3 > 155) {
+          sr += r;
+          sg += g;
+          sb += b;
+          sn++;
+        }
       }
     }
-    const colorLabel = classifyColor(hs / n, ss / n, ls / n);
+    // Per-channel correction: shift sclera to neutral white, cap at 1.55x
+    let wr = 1,
+      wg = 1,
+      wb = 1;
+    if (sn > 40) {
+      const ar = sr / sn,
+        ag = sg / sn,
+        ab = sb / sn,
+        mx = Math.max(ar, ag, ab);
+      wr = Math.min(mx / ar, 1.55);
+      wg = Math.min(mx / ag, 1.55);
+      wb = Math.min(mx / ab, 1.55);
+    }
+
+    // ── 2. Ring sampling: exclude pupil (inner 32%) + limbal ring (outer 16%) ─
+    const ringIn = irisR * 0.32,
+      ringOut = irisR * 0.84;
+    // Hue histogram: 72 bins × 5°, weighted by saturation² to suppress noise
+    const bins = new Float32Array(72);
+    let wsSum = 0,
+      wlSum = 0,
+      wCount = 0;
+    for (let y = 0; y < CROP; y += 2) for (let x = 0; x < CROP; x += 2) {
+      const dx = x - cxp,
+        dy = y - cyp,
+        dist = Math.sqrt(dx * dx + dy * dy);
+      if (dist >= ringIn && dist <= ringOut) {
+        const i = (y * CROP + x) * 4;
+        const r = Math.min(255, d[i] * wr),
+          g = Math.min(255, d[i + 1] * wg),
+          b = Math.min(255, d[i + 2] * wb);
+        const [h, s, l] = rgbToHsl(r, g, b);
+        if (s > 0.07) bins[Math.floor(h / 5) % 72] += s * s;
+        wsSum += s;
+        wlSum += l;
+        wCount++;
+      }
+    }
+
+    // ── 3. Smooth histogram + peak = dominant hue ─────────────────────────────
+    const sm = new Float32Array(72);
+    for (let i = 0; i < 72; i++) {
+      sm[i] = (bins[(i - 2 + 72) % 72] + bins[(i - 1 + 72) % 72] * 2 + bins[i] * 3 + bins[(i + 1) % 72] * 2 + bins[(i + 2) % 72]) / 9;
+    }
+    let peakBin = 0,
+      peakVal = 0;
+    for (let i = 0; i < 72; i++) if (sm[i] > peakVal) {
+      peakVal = sm[i];
+      peakBin = i;
+    }
+    const dominantHue = peakBin * 5 + 2.5;
+    const meanS = wCount > 0 ? wsSum / wCount : 0;
+    const meanL = wCount > 0 ? wlSum / wCount : 0;
+    const colorLabel = classifyColor(dominantHue, meanS, meanL);
     const dataUrl = c.toDataURL("image/jpeg", 0.9);
     lastCropRef.current = dataUrl;
     lastColorRef.current = colorLabel;
