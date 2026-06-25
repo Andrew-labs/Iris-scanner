@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0, user-scalable=no" />
+<title>IrisLens</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet" />
+<style>
+  html, body { margin:0; padding:0; background:#0a0a0f; }
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<!-- MediaPipe: the only ES module in this file. Loads the library, exposes it, signals readiness. -->
+<script type="module">
+  try {
+    const v = await import("https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.18");
+    window.visionTasks = v;
+    window.dispatchEvent(new Event("mp-ready"));
+  } catch (e) { console.error("MediaPipe load failed:", e); }
+</script>
+
+<script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+
+<!-- Precompiled app: plain JS, no JSX, no Babel, no import statements. -->
+<script src="app.js"></script>
+</body>
+</html>

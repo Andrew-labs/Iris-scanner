@@ -1,0 +1,9 @@
+{
+  "name": "irislens",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Guided iris capture + AI iris generation activation",
+  "engines": {
+    "node": ">=18"
+  }
+}
