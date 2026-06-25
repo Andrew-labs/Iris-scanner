@@ -38,98 +38,61 @@ function rgbToHsl(r,g,b){
   return[h,s,l];
 }
 
-// HUD Overlay SVG — scan rings, tick marks, brackets, data readouts
 function HudOverlay({ state }) {
-  // state: "searching" | "aligning" | "locking" | "capturing"
   const cyan = "#00d4ff";
   const dim = "rgba(0,212,255,0.3)";
   const mid = "rgba(0,212,255,0.6)";
-
-  const lockColor = state === "locking" || state === "capturing" ? cyan : dim;
-  const ringOpacity = state === "capturing" ? 1 : 0.7;
-
-  // Generate tick marks around the outer ring
+  const lockColor = state==="locking"||state==="capturing" ? cyan : dim;
+  const ringOpacity = state==="capturing" ? 1 : 0.7;
   const ticks = [];
-  for (let i = 0; i < 72; i++) {
-    const angle = (i * 5) * Math.PI / 180;
-    const isMajor = i % 9 === 0;
-    const r1 = isMajor ? 152 : 156;
-    const r2 = 162;
-    const x1 = 200 + r1 * Math.cos(angle);
-    const y1 = 200 + r1 * Math.sin(angle);
-    const x2 = 200 + r2 * Math.cos(angle);
-    const y2 = 200 + r2 * Math.sin(angle);
+  for(let i=0;i<72;i++){
+    const angle=(i*5)*Math.PI/180;
+    const isMajor=i%9===0;
+    const r1=isMajor?152:156, r2=162;
     ticks.push(
-      <line key={i} x1={x1} y1={y1} x2={x2} y2={y2}
-        stroke={isMajor ? cyan : dim}
-        strokeWidth={isMajor ? 1.5 : 0.8}
-        opacity={ringOpacity} />
+      <line key={i}
+        x1={200+r1*Math.cos(angle)} y1={200+r1*Math.sin(angle)}
+        x2={200+r2*Math.cos(angle)} y2={200+r2*Math.sin(angle)}
+        stroke={isMajor?cyan:dim} strokeWidth={isMajor?1.5:0.8} opacity={ringOpacity} />
     );
   }
-
   return (
     <svg viewBox="0 0 400 400" style={{
-      position:"absolute", top:"50%", left:"50%",
-      width:"min(88vw,380px)", height:"min(88vw,380px)",
-      transform:"translate(-50%,-55%)", pointerEvents:"none",
-      overflow:"visible"
+      position:"absolute",top:"50%",left:"50%",
+      width:"min(88vw,380px)",height:"min(88vw,380px)",
+      transform:"translate(-50%,-55%)",pointerEvents:"none",overflow:"visible"
     }}>
-      {/* Outer tick ring */}
       {ticks}
-
-      {/* Outer measurement ring */}
-      <circle cx="200" cy="200" r="162" fill="none" stroke={dim} strokeWidth="1" strokeDasharray="4 3" opacity={ringOpacity} />
-
-      {/* Secondary ring */}
-      <circle cx="200" cy="200" r="142" fill="none" stroke={lockColor} strokeWidth="1" opacity="0.5" />
-
-      {/* Main guide ring */}
+      <circle cx="200" cy="200" r="162" fill="none" stroke={dim} strokeWidth="1" strokeDasharray="4 3" opacity={ringOpacity}/>
+      <circle cx="200" cy="200" r="142" fill="none" stroke={lockColor} strokeWidth="1" opacity="0.5"/>
       <circle cx="200" cy="200" r="120" fill="none" stroke={lockColor} strokeWidth="2.5"
-        strokeDasharray={state === "locking" ? "30 8" : state === "capturing" ? "none" : "60 20"}
-        style={{transition:"all 0.4s"}} />
-
-      {/* Inner detail ring */}
-      <circle cx="200" cy="200" r="96" fill="none" stroke={dim} strokeWidth="1" strokeDasharray="3 6" />
-
-      {/* Corner brackets — top left */}
-      <path d="M 56 100 L 56 56 L 100 56" fill="none" stroke={cyan} strokeWidth="2" opacity={ringOpacity} />
-      {/* top right */}
-      <path d="M 300 56 L 344 56 L 344 100" fill="none" stroke={cyan} strokeWidth="2" opacity={ringOpacity} />
-      {/* bottom left */}
-      <path d="M 56 300 L 56 344 L 100 344" fill="none" stroke={cyan} strokeWidth="2" opacity={ringOpacity} />
-      {/* bottom right */}
-      <path d="M 300 344 L 344 344 L 344 300" fill="none" stroke={cyan} strokeWidth="2" opacity={ringOpacity} />
-
-      {/* Crosshair lines */}
-      <line x1="200" y1="72" x2="200" y2="88" stroke={mid} strokeWidth="1.5" />
-      <line x1="200" y1="312" x2="200" y2="328" stroke={mid} strokeWidth="1.5" />
-      <line x1="72" y1="200" x2="88" y2="200" stroke={mid} strokeWidth="1.5" />
-      <line x1="312" y1="200" x2="328" y2="200" stroke={mid} strokeWidth="1.5" />
-
-      {/* Data readouts */}
-      <text x="108" y="52" fill={cyan} fontSize="9" fontFamily="Inter, monospace" opacity="0.7">IRIS.SCAN</text>
-      <text x="264" y="52" fill={cyan} fontSize="9" fontFamily="Inter, monospace" opacity="0.7" textAnchor="end">v2.4</text>
-      <text x="56" y="360" fill={cyan} fontSize="8" fontFamily="Inter, monospace" opacity="0.6">LAT: {state === "capturing" ? "LOCKED" : "—"}</text>
-      <text x="344" y="360" fill={cyan} fontSize="8" fontFamily="Inter, monospace" opacity="0.6" textAnchor="end">
-        {state === "capturing" ? "CAPTURED" : state === "locking" ? "LOCKING..." : "SCANNING"}
+        strokeDasharray={state==="locking"?"30 8":state==="capturing"?"none":"60 20"}
+        style={{transition:"all 0.4s"}}/>
+      <circle cx="200" cy="200" r="96" fill="none" stroke={dim} strokeWidth="1" strokeDasharray="3 6"/>
+      <path d="M 56 100 L 56 56 L 100 56" fill="none" stroke={cyan} strokeWidth="2" opacity={ringOpacity}/>
+      <path d="M 300 56 L 344 56 L 344 100" fill="none" stroke={cyan} strokeWidth="2" opacity={ringOpacity}/>
+      <path d="M 56 300 L 56 344 L 100 344" fill="none" stroke={cyan} strokeWidth="2" opacity={ringOpacity}/>
+      <path d="M 300 344 L 344 344 L 344 300" fill="none" stroke={cyan} strokeWidth="2" opacity={ringOpacity}/>
+      <line x1="200" y1="72" x2="200" y2="88" stroke={mid} strokeWidth="1.5"/>
+      <line x1="200" y1="312" x2="200" y2="328" stroke={mid} strokeWidth="1.5"/>
+      <line x1="72" y1="200" x2="88" y2="200" stroke={mid} strokeWidth="1.5"/>
+      <line x1="312" y1="200" x2="328" y2="200" stroke={mid} strokeWidth="1.5"/>
+      <text x="108" y="52" fill={cyan} fontSize="9" fontFamily="Inter,monospace" opacity="0.7">IRIS.SCAN</text>
+      <text x="264" y="52" fill={cyan} fontSize="9" fontFamily="Inter,monospace" opacity="0.7" textAnchor="end">v2.4</text>
+      <text x="56" y="360" fill={cyan} fontSize="8" fontFamily="Inter,monospace" opacity="0.6">LAT: {state==="capturing"?"LOCKED":"—"}</text>
+      <text x="344" y="360" fill={cyan} fontSize="8" fontFamily="Inter,monospace" opacity="0.6" textAnchor="end">
+        {state==="capturing"?"CAPTURED":state==="locking"?"LOCKING...":"SCANNING"}
       </text>
-
-      {/* Lock indicators — 4 corner pips on the main ring */}
-      {[0, 90, 180, 270].map(deg => {
-        const a = deg * Math.PI / 180;
-        return (
-          <circle key={deg}
-            cx={200 + 120 * Math.cos(a)} cy={200 + 120 * Math.sin(a)}
-            r="4" fill={state === "locking" || state === "capturing" ? cyan : "none"}
-            stroke={cyan} strokeWidth="1.5" opacity={ringOpacity}
-          />
-        );
+      {[0,90,180,270].map(deg=>{
+        const a=deg*Math.PI/180;
+        return <circle key={deg}
+          cx={200+120*Math.cos(a)} cy={200+120*Math.sin(a)}
+          r="4" fill={state==="locking"||state==="capturing"?cyan:"none"}
+          stroke={cyan} strokeWidth="1.5" opacity={ringOpacity}/>;
       })}
-
-      {/* Capture flash ring */}
-      {state === "capturing" && (
+      {state==="capturing"&&(
         <circle cx="200" cy="200" r="120" fill="none" stroke={cyan} strokeWidth="6" opacity="0.9"
-          style={{animation:"captureFlash 0.4s ease-out forwards"}} />
+          style={{animation:"captureFlash 0.4s ease-out forwards"}}/>
       )}
     </svg>
   );
@@ -157,106 +120,93 @@ function IrisLens() {
   const lastColorRef = useRef("natural");
 
   const loadLandmarker = useCallback(async () => {
-    if (landmarkerRef.current) return landmarkerRef.current;
+    if(landmarkerRef.current) return landmarkerRef.current;
     let vision = window.visionTasks;
-    if (!vision) {
-      await new Promise((resolve, reject) => {
-        const t = setTimeout(() => reject(new Error("MediaPipe load timeout")), 20000);
-        window.addEventListener("mp-ready", () => { clearTimeout(t); resolve(); }, { once: true });
+    if(!vision){
+      await new Promise((resolve,reject)=>{
+        const t=setTimeout(()=>reject(new Error("MediaPipe load timeout")),20000);
+        window.addEventListener("mp-ready",()=>{clearTimeout(t);resolve();},{once:true});
       });
-      vision = window.visionTasks;
+      vision=window.visionTasks;
     }
-    const { FaceLandmarker, FilesetResolver } = vision;
-    const fileset = await FilesetResolver.forVisionTasks(CDN_WASM);
-    const lm = await FaceLandmarker.createFromOptions(fileset, {
-      baseOptions: { modelAssetPath: MODEL_URL, delegate: "GPU" },
-      runningMode: "VIDEO", numFaces: 1, outputFaceBlendshapes: false,
+    const {FaceLandmarker,FilesetResolver}=vision;
+    const fileset=await FilesetResolver.forVisionTasks(CDN_WASM);
+    const lm=await FaceLandmarker.createFromOptions(fileset,{
+      baseOptions:{modelAssetPath:MODEL_URL,delegate:"GPU"},
+      runningMode:"VIDEO",numFaces:1,outputFaceBlendshapes:false,
     });
-    landmarkerRef.current = lm;
+    landmarkerRef.current=lm;
     return lm;
-  }, []);
+  },[]);
 
-  const startCamera = useCallback(async () => {
+  const startCamera=useCallback(async()=>{
     setPermError(null);
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: "user", width: { ideal: 1280 }, height: { ideal: 720 } },
-        audio: false,
+    try{
+      const stream=await navigator.mediaDevices.getUserMedia({
+        video:{facingMode:"user",width:{ideal:1280},height:{ideal:720}},audio:false,
       });
-      streamRef.current = stream;
-      if (videoRef.current) { videoRef.current.srcObject = stream; await videoRef.current.play(); }
+      streamRef.current=stream;
+      if(videoRef.current){videoRef.current.srcObject=stream;await videoRef.current.play();}
       await loadLandmarker();
-      capturedRef.current = false;
-      holdStartRef.current = null;
+      capturedRef.current=false;holdStartRef.current=null;
       setHudState("searching");
       loop();
-    } catch (e) {
-      if (e.name === "NotAllowedError") setPermError("Camera access blocked. Enable it in browser settings.");
-      else if (e.name === "NotFoundError") setPermError("No camera found on this device.");
-      else setPermError("Could not start camera: " + e.message);
+    }catch(e){
+      if(e.name==="NotAllowedError") setPermError("Camera access blocked. Enable it in browser settings.");
+      else if(e.name==="NotFoundError") setPermError("No camera found on this device.");
+      else setPermError("Could not start camera: "+e.message);
     }
-  }, [loadLandmarker]);
+  },[loadLandmarker]);
 
-  const stopCamera = useCallback(() => {
-    if (rafRef.current) cancelAnimationFrame(rafRef.current);
-    if (streamRef.current) streamRef.current.getTracks().forEach(t => t.stop());
-    streamRef.current = null;
-  }, []);
+  const stopCamera=useCallback(()=>{
+    if(rafRef.current) cancelAnimationFrame(rafRef.current);
+    if(streamRef.current) streamRef.current.getTracks().forEach(t=>t.stop());
+    streamRef.current=null;
+  },[]);
 
-  const loop = useCallback(() => {
-    const video = videoRef.current, lm = landmarkerRef.current;
-    if (!video || !lm || video.readyState < 2 || capturedRef.current) {
-      rafRef.current = requestAnimationFrame(loop); return;
+  const loop=useCallback(()=>{
+    const video=videoRef.current,lm=landmarkerRef.current;
+    if(!video||!lm||video.readyState<2||capturedRef.current){
+      rafRef.current=requestAnimationFrame(loop);return;
     }
     let res;
-    try { res = lm.detectForVideo(video, performance.now()); }
-    catch { rafRef.current = requestAnimationFrame(loop); return; }
-
-    if (!res.faceLandmarks || !res.faceLandmarks.length) {
-      setStatus("Position your eye within the ring");
-      setHudState("searching");
-      holdStartRef.current = null;
-    } else {
-      const pts = res.faceLandmarks[0];
-      const iris = R_IRIS.map(i => pts[i]);
-      const cx = iris.reduce((a,p)=>a+p.x,0)/4;
-      const cy = iris.reduce((a,p)=>a+p.y,0)/4;
-      const rad = Math.max(...iris.map(p=>Math.hypot(p.x-cx,p.y-cy)));
-      const dist = Math.hypot(cx-0.5, cy-0.5);
-
-      if (dist > ALIGN_TOL*1.6) { setStatus("Center your eye"); setHudState("searching"); holdStartRef.current=null; }
-      else if (rad < 0.018) { setStatus("Move closer"); setHudState("searching"); holdStartRef.current=null; }
-      else if (rad > 0.09) { setStatus("Move back slightly"); setHudState("searching"); holdStartRef.current=null; }
-      else if (dist > ALIGN_TOL) { setStatus("Align to center"); setHudState("aligning"); holdStartRef.current=null; }
-      else {
-        if (!holdStartRef.current) holdStartRef.current = performance.now();
-        const held = performance.now() - holdStartRef.current;
-        if (held >= HOLD_MS) {
-          capturedRef.current = true;
-          setHudState("capturing");
-          setStatus("Captured");
-          setTimeout(() => capture(cx, cy, rad), 200);
-          return;
+    try{res=lm.detectForVideo(video,performance.now());}
+    catch{rafRef.current=requestAnimationFrame(loop);return;}
+    if(!res.faceLandmarks||!res.faceLandmarks.length){
+      setStatus("Position your eye within the ring");setHudState("searching");holdStartRef.current=null;
+    }else{
+      const pts=res.faceLandmarks[0];
+      const iris=R_IRIS.map(i=>pts[i]);
+      const cx=iris.reduce((a,p)=>a+p.x,0)/4;
+      const cy=iris.reduce((a,p)=>a+p.y,0)/4;
+      const rad=Math.max(...iris.map(p=>Math.hypot(p.x-cx,p.y-cy)));
+      const dist=Math.hypot(cx-0.5,cy-0.5);
+      if(dist>ALIGN_TOL*1.6){setStatus("Center your eye");setHudState("searching");holdStartRef.current=null;}
+      else if(rad<0.018){setStatus("Move closer");setHudState("searching");holdStartRef.current=null;}
+      else if(rad>0.09){setStatus("Move back slightly");setHudState("searching");holdStartRef.current=null;}
+      else if(dist>ALIGN_TOL){setStatus("Align to center");setHudState("aligning");holdStartRef.current=null;}
+      else{
+        if(!holdStartRef.current) holdStartRef.current=performance.now();
+        if(performance.now()-holdStartRef.current>=HOLD_MS){
+          capturedRef.current=true;setHudState("capturing");setStatus("Captured");
+          setTimeout(()=>capture(cx,cy,rad),200);return;
         }
-        setHudState("locking");
-        setStatus("Hold steady");
+        setHudState("locking");setStatus("Hold steady");
       }
     }
-    rafRef.current = requestAnimationFrame(loop);
-  }, []);
+    rafRef.current=requestAnimationFrame(loop);
+  },[]);
 
-  const capture = useCallback((ncx, ncy, nrad) => {
-    const video = videoRef.current;
-    const vw = video.videoWidth, vh = video.videoHeight;
-    const pad = 3.2;
-    const radPx = nrad * vw * pad;
-    const cxPx = ncx * vw, cyPx = ncy * vh;
-    const c = document.createElement("canvas");
-    c.width = CROP; c.height = CROP;
-    const ctx = c.getContext("2d");
-    ctx.drawImage(video, cxPx-radPx, cyPx-radPx, radPx*2, radPx*2, 0, 0, CROP, CROP);
-    const img = ctx.getImageData(0,0,CROP,CROP).data;
-    const cxp=CROP/2, cyp=CROP/2, innerR=CROP*0.18;
+  const capture=useCallback((ncx,ncy,nrad)=>{
+    const video=videoRef.current;
+    const vw=video.videoWidth,vh=video.videoHeight;
+    const pad=3.2,radPx=nrad*vw*pad,cxPx=ncx*vw,cyPx=ncy*vh;
+    const c=document.createElement("canvas");
+    c.width=CROP;c.height=CROP;
+    const ctx=c.getContext("2d");
+    ctx.drawImage(video,cxPx-radPx,cyPx-radPx,radPx*2,radPx*2,0,0,CROP,CROP);
+    const img=ctx.getImageData(0,0,CROP,CROP).data;
+    const cxp=CROP/2,cyp=CROP/2,innerR=CROP*0.18;
     let hs=0,ss=0,ls=0,n=0;
     for(let y=0;y<CROP;y+=2) for(let x=0;x<CROP;x+=2){
       const dx=x-cxp,dy=y-cyp;
@@ -266,110 +216,116 @@ function IrisLens() {
         hs+=h;ss+=s;ls+=l;n++;
       }
     }
-    const colorLabel = classifyColor(hs/n,ss/n,ls/n);
-    const dataUrl = c.toDataURL("image/jpeg",0.9);
-    lastCropRef.current = dataUrl;
-    lastColorRef.current = colorLabel;
-    stopCamera();
-    setGenError(null);
-    setScreen("processing");
-    generate(dataUrl, colorLabel);
-  }, [stopCamera]);
+    const colorLabel=classifyColor(hs/n,ss/n,ls/n);
+    const dataUrl=c.toDataURL("image/jpeg",0.9);
+    lastCropRef.current=dataUrl;lastColorRef.current=colorLabel;
+    stopCamera();setGenError(null);setScreen("processing");
+    generate(dataUrl,colorLabel);
+  },[stopCamera]);
 
-  const generate = useCallback(async (dataUrl, colorLabel) => {
-    const msgs = ["Reading iris geometry…","Mapping fibre patterns…","Rendering macro detail…","Finalising your portrait…"];
-    let mi = 0; setProcMsg(msgs[0]);
-    const t = setInterval(() => { mi=(mi+1)%msgs.length; setProcMsg(msgs[mi]); }, 2800);
-    try {
-      const startRes = await fetch("/api/generate", {
-        method:"POST", headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({ imageDataUrl:dataUrl, colorLabel }),
+  const generate=useCallback(async(dataUrl,colorLabel)=>{
+    const msgs=["Reading iris geometry…","Mapping fibre patterns…","Rendering macro detail…","Finalising your portrait…"];
+    let mi=0;setProcMsg(msgs[0]);
+    const t=setInterval(()=>{mi=(mi+1)%msgs.length;setProcMsg(msgs[mi]);},2800);
+    try{
+      const startRes=await fetch("/api/generate",{
+        method:"POST",headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({imageDataUrl:dataUrl,colorLabel}),
       });
-      const start = await startRes.json();
-      if (!startRes.ok || !start.id) throw new Error(start.error || "Could not start generation");
-      let output = null;
-      for (let i=0;i<60;i++) {
+      const start=await startRes.json();
+      if(!startRes.ok||!start.id) throw new Error(start.error||"Could not start generation");
+      let output=null;
+      for(let i=0;i<60;i++){
         await new Promise(r=>setTimeout(r,1500));
-        const pRes = await fetch("/api/poll?id="+encodeURIComponent(start.id));
-        const p = await pRes.json();
-        if (p.status==="succeeded" && p.output) { output=p.output; break; }
-        if (p.status==="failed"||p.status==="canceled") throw new Error(p.error||"Generation failed");
+        const pRes=await fetch("/api/poll?id="+encodeURIComponent(start.id));
+        const p=await pRes.json();
+        if(p.status==="succeeded"&&p.output){output=p.output;break;}
+        if(p.status==="failed"||p.status==="canceled") throw new Error(p.error||"Generation failed");
       }
       clearInterval(t);
-      if (!output) throw new Error("Generation timed out. Please try again.");
-      const item = { url:output, color:colorLabel, date:new Date().toLocaleDateString() };
-      setResult(item);
-      setGallery(g=>[item,...g]);
-      setScreen("results");
-    } catch(e) {
-      clearInterval(t);
-      setGenError(String(e.message||e));
-    }
-  }, []);
+      if(!output) throw new Error("Generation timed out. Please try again.");
+      const item={url:output,color:colorLabel,date:new Date().toLocaleDateString()};
+      setResult(item);setGallery(g=>[item,...g]);setScreen("results");
+    }catch(e){clearInterval(t);setGenError(String(e.message||e));}
+  },[]);
 
-  useEffect(() => {
-    if (screen==="capture") startCamera();
-    return () => { if (screen==="capture") stopCamera(); };
-  }, [screen]);
+  useEffect(()=>{
+    if(screen==="capture") startCamera();
+    return()=>{if(screen==="capture") stopCamera();};
+  },[screen]);
 
-  const cyan = "#00d4ff";
+  const cyan="#00d4ff";
 
   return (
-    <div style={{minHeight:"100vh",background:"#0a0a0f",color:"#e8ecf2",fontFamily:"Inter, Roboto, system-ui, sans-serif",overflowX:"hidden"}}>
+    <div style={{minHeight:"100vh",background:"#070a0e",color:"#e8ecf2",
+      fontFamily:"Inter, Roboto, system-ui, sans-serif",overflowX:"hidden"}}>
       <style>{`
-        @keyframes pulse { 0%,100%{box-shadow:0 0 0 0 rgba(0,212,255,.4);}50%{box-shadow:0 0 28px 5px rgba(0,212,255,.55);} }
-        @keyframes spin { to{transform:rotate(360deg);} }
-        @keyframes glow { 0%,100%{opacity:.4}50%{opacity:1} }
-        @keyframes scanline { 0%{transform:translateY(-100%);opacity:0;}20%{opacity:1;}80%{opacity:1;}100%{transform:translateY(100%);opacity:0;} }
-        @keyframes captureFlash { 0%{opacity:1;r:120}100%{opacity:0;r:160} }
-        @keyframes fadeUp { from{opacity:0;transform:translateY(24px);}to{opacity:1;transform:translateY(0);} }
-        .btn{min-height:48px;border:none;border-radius:4px;font-weight:600;font-size:15px;cursor:pointer;transition:.2s;font-family:inherit;letter-spacing:.04em;}
-        .btn-primary{background:${cyan};color:#03181f;box-shadow:0 0 20px rgba(0,212,255,.35);}
-        .btn-primary:hover{box-shadow:0 0 32px rgba(0,212,255,.6);}
-        .btn-ghost{background:transparent;color:#cfe9f5;border:1px solid rgba(0,212,255,.3);}
-        .btn-ghost:hover{border-color:${cyan};background:rgba(0,212,255,.06);}
+        @keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(0,212,255,.4);}50%{box-shadow:0 0 28px 5px rgba(0,212,255,.5);}}
+        @keyframes spin{to{transform:rotate(360deg);}}
+        @keyframes glow{0%,100%{opacity:.4}50%{opacity:1}}
+        @keyframes scanline{0%{transform:translateY(-100%);opacity:0;}20%{opacity:1;}80%{opacity:1;}100%{transform:translateY(100%);opacity:0;}}
+        @keyframes captureFlash{0%{opacity:1;}100%{opacity:0;}}
+        @keyframes fadeUp{from{opacity:0;transform:translateY(20px);}to{opacity:1;transform:translateY(0);}}
+        @keyframes revealIris{from{opacity:0;transform:scale(0.92);}to{opacity:1;transform:scale(1);}}
+        .btn{min-height:48px;border:none;font-weight:600;font-size:14px;cursor:pointer;transition:all .2s;font-family:inherit;letter-spacing:.06em;text-transform:uppercase;}
+        .btn-primary{background:${cyan};color:#03181f;border-radius:3px;}
+        .btn-primary:hover{filter:brightness(1.12);}
+        .btn-ghost{background:transparent;color:rgba(207,233,245,0.7);border:1px solid rgba(0,212,255,.2);border-radius:3px;}
+        .btn-ghost:hover{border-color:rgba(0,212,255,.5);color:#e8ecf2;}
         @media(prefers-reduced-motion:reduce){*{animation:none!important}}
       `}</style>
 
       {/* ── HOME ── */}
-      {screen==="home" && (
-        <div style={{minHeight:"100vh",display:"flex",flexDirection:"column",position:"relative",overflow:"hidden"}}>
-          {/* Hero image — fills top ~65% */}
-          <div style={{flex:"0 0 62vh",position:"relative",overflow:"hidden"}}>
+      {screen==="home"&&(
+        <div style={{height:"100vh",display:"flex",flexDirection:"column",
+          position:"relative",overflow:"hidden",background:"#070a0e"}}>
+
+          {/* Hero image — fills the screen, treated with heavy dark overlay to kill white bg */}
+          <div style={{position:"absolute",inset:0}}>
             <img src="/hero.jpg" alt="" style={{
-              width:"100%",height:"100%",objectFit:"cover",objectPosition:"center top",
-              display:"block",filter:"brightness(0.88)"
-            }} />
-            {/* gradient fade to dark at the bottom */}
-            <div style={{position:"absolute",bottom:0,left:0,right:0,height:"55%",
-              background:"linear-gradient(to bottom, transparent, #0a0a0f)"}} />
-            {/* Top bar */}
-            <div style={{position:"absolute",top:0,left:0,right:0,padding:"20px 28px",
-              display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-              <span style={{fontSize:20,fontWeight:800,letterSpacing:"-0.5px"}}>
-                Iris<span style={{color:cyan}}>Lens</span>
-              </span>
-              <button className="btn btn-ghost" style={{padding:"8px 16px",fontSize:13}}
-                onClick={()=>setScreen("gallery")}>Gallery</button>
-            </div>
+              width:"100%",height:"100%",
+              objectFit:"cover",
+              objectPosition:"50% 68%", // show the eye/face area, not the top of head
+              display:"block",
+            }}/>
+            {/* Kill the white background completely: dark overlay from all edges */}
+            <div style={{position:"absolute",inset:0,
+              background:"linear-gradient(to bottom, rgba(7,10,14,0.55) 0%, rgba(7,10,14,0.1) 35%, rgba(7,10,14,0.15) 55%, rgba(7,10,14,0.92) 78%, #070a0e 100%)"}}/>
+            {/* Also darken from sides on desktop */}
+            <div style={{position:"absolute",inset:0,
+              background:"linear-gradient(to right, rgba(7,10,14,0.6) 0%, transparent 40%, transparent 60%, rgba(7,10,14,0.6) 100%)"}}/>
           </div>
 
-          {/* Content below the fold */}
-          <div style={{flex:1,display:"flex",flexDirection:"column",alignItems:"flex-start",
-            justifyContent:"flex-end",padding:"0 28px 48px",marginTop:"-60px",position:"relative",
-            animation:"fadeUp 0.6s ease-out forwards"}}>
-            <p style={{fontSize:11,fontWeight:600,letterSpacing:"0.2em",color:cyan,margin:"0 0 10px",textTransform:"uppercase"}}>
-              AI Iris Portrait
-            </p>
-            <h1 style={{fontSize:"clamp(30px,7vw,42px)",fontWeight:800,lineHeight:1.1,
-              margin:"0 0 12px",letterSpacing:"-1px"}}>
-              See your iris<br />like never before.
+          {/* Top bar */}
+          <div style={{position:"relative",zIndex:2,padding:"22px 28px",
+            display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+            <span style={{fontSize:18,fontWeight:800,letterSpacing:"-0.3px"}}>
+              Iris<span style={{color:cyan}}>Lens</span>
+            </span>
+            <button className="btn btn-ghost" style={{padding:"8px 14px",fontSize:11}}
+              onClick={()=>setScreen("gallery")}>Gallery</button>
+          </div>
+
+          {/* Bottom content — pushed to foot of screen */}
+          <div style={{position:"relative",zIndex:2,marginTop:"auto",
+            padding:"0 32px 52px",animation:"fadeUp 0.7s ease-out forwards"}}>
+
+            <p style={{fontSize:10,fontWeight:700,letterSpacing:"0.25em",color:cyan,
+              margin:"0 0 14px",textTransform:"uppercase"}}>AI Iris Portrait</p>
+
+            <h1 style={{fontSize:"clamp(34px,8vw,52px)",fontWeight:800,lineHeight:1.05,
+              margin:"0 0 16px",letterSpacing:"-1.5px",maxWidth:480}}>
+              See your iris<br/>like never before.
             </h1>
-            <p style={{color:"#8a97a6",fontSize:15,lineHeight:1.6,margin:"0 0 32px",maxWidth:340}}>
+
+            <p style={{color:"rgba(138,151,166,0.9)",fontSize:14,lineHeight:1.7,
+              margin:"0 0 36px",maxWidth:360}}>
               Advanced iris detection renders your unique eye structure in hyperreal macro detail.
             </p>
+
             <button className="btn btn-primary"
-              style={{padding:"16px 36px",fontSize:16,borderRadius:"4px",width:"100%",maxWidth:380}}
+              style={{padding:"18px 0",width:"100%",maxWidth:360,fontSize:14,
+                boxShadow:`0 0 32px rgba(0,212,255,0.25)`}}
               onClick={()=>setShowExplainer(true)}>
               Capture My Iris
             </button>
@@ -378,20 +334,15 @@ function IrisLens() {
       )}
 
       {/* ── CAPTURE ── */}
-      {screen==="capture" && (
+      {screen==="capture"&&(
         <div style={{position:"fixed",inset:0,background:"#000"}}>
           <video ref={videoRef} autoPlay playsInline muted
-            style={{width:"100%",height:"100%",objectFit:"cover",transform:"scaleX(-1)"}} />
-
-          {/* Dark vignette overlay */}
+            style={{width:"100%",height:"100%",objectFit:"cover",transform:"scaleX(-1)"}}/>
           <div style={{position:"absolute",inset:0,
             background:"radial-gradient(ellipse 60% 55% at 50% 42%, transparent 40%, rgba(0,0,0,0.75) 100%)",
-            pointerEvents:"none"}} />
-
-          {!permError && <HudOverlay state={hudState} />}
-
-          {/* Scanline animation across the guide ring */}
-          {!permError && (hudState==="locking"||hudState==="aligning") && (
+            pointerEvents:"none"}}/>
+          {!permError&&<HudOverlay state={hudState}/>}
+          {!permError&&(hudState==="locking"||hudState==="aligning")&&(
             <div style={{
               position:"absolute",top:"50%",left:"50%",
               width:"min(67vw,280px)",height:"2px",
@@ -399,86 +350,73 @@ function IrisLens() {
               background:`linear-gradient(to right, transparent, ${cyan}, transparent)`,
               animation:"scanline 1.8s ease-in-out infinite",
               pointerEvents:"none",opacity:0.7,
-            }} />
+            }}/>
           )}
-
-          {/* Status text */}
-          {!permError && (
-            <div style={{
-              position:"absolute",bottom:"max(120px,15vh)",left:0,right:0,
-              textAlign:"center",
-            }}>
-              <span style={{
-                fontSize:13,fontWeight:600,letterSpacing:"0.18em",
+          {!permError&&(
+            <div style={{position:"absolute",bottom:"max(110px,14vh)",left:0,right:0,textAlign:"center"}}>
+              <span style={{fontSize:11,fontWeight:700,letterSpacing:"0.22em",
                 textTransform:"uppercase",color:cyan,
-                textShadow:"0 0 20px rgba(0,212,255,0.8)",
-              }}>{status}</span>
+                textShadow:"0 0 20px rgba(0,212,255,0.8)"}}>{status}</span>
             </div>
           )}
-
-          {permError && (
+          {permError&&(
             <div style={{position:"absolute",inset:0,display:"flex",flexDirection:"column",
               alignItems:"center",justifyContent:"center",padding:32,textAlign:"center",
               background:"rgba(5,8,12,.92)"}}>
-              <p style={{fontSize:16,marginBottom:24,maxWidth:320}}>{permError}</p>
+              <p style={{fontSize:15,marginBottom:24,maxWidth:300}}>{permError}</p>
               <button className="btn btn-primary" style={{padding:"14px 32px"}} onClick={startCamera}>Try Again</button>
               <button className="btn btn-ghost" style={{padding:"12px 28px",marginTop:12}} onClick={()=>setScreen("home")}>Back</button>
             </div>
           )}
-
-          {/* Bottom bar */}
-          <div style={{
-            position:"absolute",bottom:"max(32px,env(safe-area-inset-bottom))",
-            left:0,right:0,display:"flex",alignItems:"center",justifyContent:"space-between",
-            padding:"0 32px",
-          }}>
-            <button className="btn btn-ghost" style={{width:44,height:44,padding:0,borderRadius:"50%",fontSize:18}}
+          <div style={{position:"absolute",bottom:"max(36px,env(safe-area-inset-bottom))",
+            left:0,right:0,display:"flex",alignItems:"center",justifyContent:"space-between",padding:"0 32px"}}>
+            <button className="btn btn-ghost" style={{width:44,height:44,padding:0,borderRadius:"50%",
+              fontSize:18,display:"flex",alignItems:"center",justifyContent:"center"}}
               onClick={()=>setScreen("home")}>✕</button>
-            <div style={{fontSize:10,color:"rgba(0,212,255,0.5)",letterSpacing:"0.15em",textTransform:"uppercase"}}>
+            <div style={{fontSize:9,color:"rgba(0,212,255,0.45)",letterSpacing:"0.18em",textTransform:"uppercase"}}>
               {hudState==="capturing"?"Captured":hudState==="locking"?"Locking…":"Scanning"}
             </div>
-            <div style={{width:44}} />
+            <div style={{width:44}}/>
           </div>
         </div>
       )}
 
       {/* ── PROCESSING ── */}
-      {screen==="processing" && (
+      {screen==="processing"&&(
         <div style={{minHeight:"100vh",display:"flex",flexDirection:"column",
           alignItems:"center",justifyContent:"center",padding:32,textAlign:"center"}}>
-          {!genError ? (
+          {!genError?(
             <>
-              {/* Animated scanner rings */}
-              <div style={{position:"relative",width:160,height:160,marginBottom:36}}>
-                <div style={{position:"absolute",inset:0,borderRadius:"50%",border:`2px solid rgba(0,212,255,0.15)`}} />
-                <div style={{position:"absolute",inset:12,borderRadius:"50%",border:`1.5px dashed rgba(0,212,255,0.2)`}} />
-                <div style={{position:"absolute",inset:24,borderRadius:"50%",border:`2px solid rgba(0,212,255,0.15)`}} />
+              <div style={{position:"relative",width:140,height:140,marginBottom:40}}>
+                <div style={{position:"absolute",inset:0,borderRadius:"50%",border:"1.5px solid rgba(0,212,255,0.12)"}}/>
+                <div style={{position:"absolute",inset:14,borderRadius:"50%",border:"1px dashed rgba(0,212,255,0.15)"}}/>
+                <div style={{position:"absolute",inset:28,borderRadius:"50%",border:"1.5px solid rgba(0,212,255,0.12)"}}/>
                 <div style={{position:"absolute",inset:0,borderRadius:"50%",
-                  border:`2px solid transparent`,borderTopColor:cyan,
-                  animation:"spin 1.2s linear infinite"}} />
-                <div style={{position:"absolute",inset:16,borderRadius:"50%",
-                  border:`1.5px solid transparent`,borderTopColor:"rgba(0,212,255,0.5)",
-                  animation:"spin 2s linear infinite reverse"}} />
+                  border:"2px solid transparent",borderTopColor:cyan,
+                  animation:"spin 1.2s linear infinite"}}/>
+                <div style={{position:"absolute",inset:18,borderRadius:"50%",
+                  border:"1px solid transparent",borderTopColor:"rgba(0,212,255,0.4)",
+                  animation:"spin 2s linear infinite reverse"}}/>
                 <div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center"}}>
-                  <div style={{width:12,height:12,borderRadius:"50%",background:cyan,
-                    animation:"pulse 1.5s ease-in-out infinite"}} />
+                  <div style={{width:10,height:10,borderRadius:"50%",background:cyan,
+                    animation:"pulse 1.5s ease-in-out infinite"}}/>
                 </div>
               </div>
-              <p style={{color:cyan,fontSize:15,fontWeight:600,letterSpacing:"0.12em",
-                textTransform:"uppercase",animation:"glow 2s infinite",marginBottom:8}}>
+              <p style={{color:cyan,fontSize:12,fontWeight:700,letterSpacing:"0.18em",
+                textTransform:"uppercase",animation:"glow 2s infinite",marginBottom:10}}>
                 {procMsg}
               </p>
-              <p style={{color:"#3a4856",fontSize:12,letterSpacing:"0.08em"}}>
-                AI RENDERING — UP TO 30 SECONDS
+              <p style={{color:"rgba(58,72,86,0.9)",fontSize:11,letterSpacing:"0.1em",textTransform:"uppercase"}}>
+                AI rendering — up to 30 seconds
               </p>
             </>
-          ) : (
+          ):(
             <>
-              <p style={{fontSize:15,color:"#e8ecf2",marginBottom:8}}>Generation failed</p>
+              <p style={{fontSize:14,color:"#e8ecf2",marginBottom:8}}>Generation failed</p>
               <p style={{color:"#8a97a6",fontSize:13,marginBottom:28,maxWidth:300}}>{genError}</p>
               <button className="btn btn-primary" style={{padding:"14px 32px"}} onClick={()=>{
                 setGenError(null);
-                if(lastCropRef.current) generate(lastCropRef.current, lastColorRef.current);
+                if(lastCropRef.current) generate(lastCropRef.current,lastColorRef.current);
                 else setScreen("capture");
               }}>Try Again</button>
               <button className="btn btn-ghost" style={{padding:"12px 28px",marginTop:12}}
@@ -489,86 +427,123 @@ function IrisLens() {
       )}
 
       {/* ── RESULTS ── */}
-      {screen==="results" && result && (
+      {result&&screen==="results"&&(
         <div style={{minHeight:"100vh",display:"flex",flexDirection:"column",
-          alignItems:"center",padding:"48px 24px 40px",animation:"fadeUp 0.5s ease-out"}}>
-          <p style={{fontSize:10,fontWeight:600,letterSpacing:"0.2em",color:cyan,
-            textTransform:"uppercase",marginBottom:20}}>Your Iris Portrait</p>
+          alignItems:"center",background:"#070a0e",position:"relative",overflow:"hidden"}}>
 
-          {/* Iris display */}
-          <div style={{position:"relative",marginBottom:32}}>
-            <img src={result.url} alt="Your iris"
-              style={{width:"min(78vw,340px)",height:"min(78vw,340px)",borderRadius:"50%",
-                objectFit:"cover",display:"block",
-                boxShadow:`0 0 0 1px rgba(0,212,255,0.2), 0 0 40px rgba(0,212,255,0.15), 0 0 80px rgba(0,212,255,0.08)`}} />
-            {/* Decorative ring */}
-            <div style={{position:"absolute",inset:-8,borderRadius:"50%",
-              border:"1px solid rgba(0,212,255,0.15)",pointerEvents:"none"}} />
-            <div style={{position:"absolute",inset:-16,borderRadius:"50%",
-              border:"1px dashed rgba(0,212,255,0.08)",pointerEvents:"none"}} />
+          {/* Subtle ambient glow behind the iris */}
+          <div style={{position:"absolute",top:"18%",left:"50%",transform:"translateX(-50%)",
+            width:"70vw",height:"70vw",maxWidth:500,maxHeight:500,borderRadius:"50%",
+            background:"radial-gradient(circle, rgba(0,212,255,0.07) 0%, transparent 70%)",
+            pointerEvents:"none"}}/>
+
+          {/* Top label */}
+          <div style={{paddingTop:"max(28px,env(safe-area-inset-top))",paddingBottom:20,
+            width:"100%",display:"flex",alignItems:"center",justifyContent:"space-between",
+            padding:"24px 28px 0"}}>
+            <button className="btn btn-ghost" style={{padding:"8px 14px",fontSize:11}}
+              onClick={()=>setScreen("home")}>← Home</button>
+            <button className="btn btn-ghost" style={{padding:"8px 14px",fontSize:11}}
+              onClick={()=>setScreen("gallery")}>Gallery</button>
           </div>
 
-          {/* Color label */}
-          <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:36}}>
-            <span style={{width:12,height:12,borderRadius:"50%",
-              background:SWATCH[result.color]||"#777",
-              boxShadow:`0 0 8px ${SWATCH[result.color]||"#777"}`}} />
-            <span style={{fontSize:13,fontWeight:600,letterSpacing:"0.15em",
-              textTransform:"uppercase",color:"#9aaab8"}}>{result.color}</span>
+          {/* Iris — the centrepiece. Large, dramatic, takes most of the screen. */}
+          <div style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",
+            padding:"16px 24px",animation:"revealIris 0.8s cubic-bezier(0.16,1,0.3,1) forwards"}}>
+            <div style={{position:"relative"}}>
+              {/* Decorative outer rings */}
+              <div style={{position:"absolute",inset:-20,borderRadius:"50%",
+                border:"1px solid rgba(0,212,255,0.1)",pointerEvents:"none"}}/>
+              <div style={{position:"absolute",inset:-36,borderRadius:"50%",
+                border:"1px dashed rgba(0,212,255,0.06)",pointerEvents:"none"}}/>
+              <div style={{position:"absolute",inset:-52,borderRadius:"50%",
+                border:"1px solid rgba(0,212,255,0.04)",pointerEvents:"none"}}/>
+
+              <img src={result.url} alt="Your iris"
+                style={{
+                  width:"min(82vw,440px)",
+                  height:"min(82vw,440px)",
+                  borderRadius:"50%",
+                  objectFit:"cover",
+                  display:"block",
+                  boxShadow:[
+                    `0 0 0 1px rgba(0,212,255,0.18)`,
+                    `0 0 40px rgba(0,212,255,0.14)`,
+                    `0 0 100px rgba(0,212,255,0.08)`,
+                    `0 0 180px rgba(0,212,255,0.04)`,
+                  ].join(","),
+                }}/>
+            </div>
           </div>
 
-          {/* Actions */}
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,width:"100%",maxWidth:380}}>
-            <button className="btn btn-primary" style={{padding:"14px"}} onClick={async()=>{
-              try{
-                const blob=await(await fetch(result.url)).blob();
-                const url=URL.createObjectURL(blob);
-                const a=document.createElement("a");
-                a.href=url;a.download=`irislens-${Date.now()}.png`;a.click();
-                URL.revokeObjectURL(url);
-              }catch{window.open(result.url,"_blank");}
-            }}>Save Image</button>
-            <button className="btn btn-ghost" style={{padding:"14px"}} onClick={async()=>{
-              try{
-                const blob=await(await fetch(result.url)).blob();
-                const file=new File([blob],"iris.png",{type:"image/png"});
-                if(navigator.canShare&&navigator.canShare({files:[file]}))
-                  await navigator.share({files:[file],title:"My iris — IrisLens"});
-                else{await navigator.clipboard.writeText(result.url);}
-              }catch{}
-            }}>Share</button>
-            <button className="btn btn-ghost" style={{padding:"14px",gridColumn:"1/-1"}}
-              onClick={()=>setScreen("capture")}>Capture Again</button>
+          {/* Color label + actions — minimal, at the foot */}
+          <div style={{width:"100%",padding:"0 28px 48px",textAlign:"center"}}>
+            <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:10,marginBottom:32}}>
+              <span style={{width:8,height:8,borderRadius:"50%",
+                background:SWATCH[result.color]||"#777",
+                boxShadow:`0 0 6px ${SWATCH[result.color]||"#777"}66`}}/>
+              <span style={{fontSize:10,fontWeight:700,letterSpacing:"0.22em",
+                color:"rgba(138,151,166,0.8)",textTransform:"uppercase"}}>{result.color}</span>
+            </div>
+
+            <div style={{display:"flex",gap:10,justifyContent:"center"}}>
+              <button className="btn btn-primary"
+                style={{padding:"14px 28px",fontSize:12}}
+                onClick={async()=>{
+                  try{
+                    const blob=await(await fetch(result.url)).blob();
+                    const url=URL.createObjectURL(blob);
+                    const a=document.createElement("a");
+                    a.href=url;a.download=`iris-${Date.now()}.png`;a.click();
+                    URL.revokeObjectURL(url);
+                  }catch{window.open(result.url,"_blank");}
+                }}>Save</button>
+              <button className="btn btn-ghost"
+                style={{padding:"14px 28px",fontSize:12}}
+                onClick={async()=>{
+                  try{
+                    const blob=await(await fetch(result.url)).blob();
+                    const file=new File([blob],"iris.png",{type:"image/png"});
+                    if(navigator.canShare&&navigator.canShare({files:[file]}))
+                      await navigator.share({files:[file],title:"My iris — IrisLens"});
+                    else await navigator.clipboard.writeText(result.url);
+                  }catch{}
+                }}>Share</button>
+              <button className="btn btn-ghost"
+                style={{padding:"14px 20px",fontSize:12}}
+                onClick={()=>setScreen("capture")}>Again</button>
+            </div>
           </div>
         </div>
       )}
 
       {/* ── GALLERY ── */}
-      {screen==="gallery" && (
+      {screen==="gallery"&&(
         <div style={{minHeight:"100vh",padding:"32px 20px"}}>
           <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:28}}>
-            <h2 style={{fontSize:22,fontWeight:800,margin:0,letterSpacing:"-0.5px"}}>Gallery</h2>
-            <button className="btn btn-ghost" style={{padding:"9px 18px",fontSize:13}}
+            <h2 style={{fontSize:20,fontWeight:800,margin:0,letterSpacing:"-0.5px"}}>Gallery</h2>
+            <button className="btn btn-ghost" style={{padding:"9px 16px",fontSize:11}}
               onClick={()=>setScreen("home")}>Home</button>
           </div>
-          {gallery.length===0 ? (
+          {gallery.length===0?(
             <div style={{textAlign:"center",color:"#5a6676",marginTop:80}}>
-              <p style={{marginBottom:24}}>No captures yet.</p>
+              <p style={{marginBottom:24,fontSize:14}}>No captures yet.</p>
               <button className="btn btn-primary" style={{padding:"14px 32px"}}
                 onClick={()=>setShowExplainer(true)}>Capture My Iris</button>
             </div>
-          ) : (
+          ):(
             <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(130px,1fr))",gap:16}}>
               {gallery.map((it,i)=>(
                 <div key={i} onClick={()=>setExpanded(it)} style={{cursor:"pointer",textAlign:"center"}}>
                   <img src={it.url} alt="" style={{width:"100%",borderRadius:"50%",
-                    border:"1px solid rgba(0,212,255,.2)"}} />
+                    border:"1px solid rgba(0,212,255,.15)"}}/>
                   <div style={{display:"flex",alignItems:"center",justifyContent:"center",
-                    gap:6,marginTop:8,fontSize:12,textTransform:"capitalize",letterSpacing:"0.05em"}}>
-                    <span style={{width:8,height:8,borderRadius:"50%",background:SWATCH[it.color]||"#777"}} />
+                    gap:6,marginTop:8,fontSize:11,textTransform:"capitalize",letterSpacing:"0.06em",
+                    color:"rgba(138,151,166,0.8)"}}>
+                    <span style={{width:7,height:7,borderRadius:"50%",background:SWATCH[it.color]||"#777"}}/>
                     {it.color}
                   </div>
-                  <div style={{fontSize:10,color:"#4a5666",marginTop:2}}>{it.date}</div>
+                  <div style={{fontSize:10,color:"#3a4856",marginTop:2}}>{it.date}</div>
                 </div>
               ))}
             </div>
@@ -577,32 +552,58 @@ function IrisLens() {
       )}
 
       {/* ── EXPANDED ── */}
-      {expanded && (
+      {expanded&&(
         <div onClick={()=>setExpanded(null)} style={{position:"fixed",inset:0,
           background:"rgba(3,5,8,.97)",display:"flex",alignItems:"center",
           justifyContent:"center",padding:24,zIndex:30}}>
           <img src={expanded.url} alt="" style={{maxWidth:"90vw",maxHeight:"80vh",
-            borderRadius:"50%",boxShadow:`0 0 60px rgba(0,212,255,.35)`}} />
+            borderRadius:"50%",boxShadow:`0 0 60px rgba(0,212,255,.3)`}}/>
         </div>
       )}
 
       {/* ── EXPLAINER MODAL ── */}
-      {showExplainer && (
-        <div style={{position:"fixed",inset:0,background:"rgba(3,5,8,.92)",
-          display:"flex",alignItems:"center",justifyContent:"center",padding:24,zIndex:40}}>
-          <div style={{background:"#0c1219",border:"1px solid rgba(0,212,255,.2)",
-            borderRadius:8,padding:32,maxWidth:340,textAlign:"center",width:"100%"}}>
-            <div style={{width:48,height:48,borderRadius:"50%",
-              border:`1.5px solid ${cyan}`,margin:"0 auto 20px",
-              display:"flex",alignItems:"center",justifyContent:"center",fontSize:22}}>👁</div>
-            <h3 style={{margin:"0 0 10px",fontSize:18,fontWeight:700}}>Camera Required</h3>
-            <p style={{color:"#8a97a6",fontSize:14,lineHeight:1.6,margin:"0 0 28px"}}>
-              IrisLens uses your camera to guide you through an iris capture. Everything processes on your device — nothing is uploaded.
+      {showExplainer&&(
+        <div style={{position:"fixed",inset:0,
+          background:"rgba(4,7,11,0.88)",backdropFilter:"blur(12px)",
+          display:"flex",alignItems:"center",justifyContent:"center",
+          padding:24,zIndex:40}}>
+          <div style={{background:"rgba(10,16,24,0.96)",
+            border:"1px solid rgba(0,212,255,.15)",
+            borderRadius:6,padding:"36px 32px",maxWidth:320,textAlign:"center",width:"100%",
+            boxShadow:"0 0 0 1px rgba(0,212,255,0.05), 0 40px 80px rgba(0,0,0,0.6)"}}>
+
+            {/* SVG eye icon */}
+            <div style={{margin:"0 auto 24px",width:48,height:48,borderRadius:"50%",
+              border:`1px solid rgba(0,212,255,0.3)`,
+              display:"flex",alignItems:"center",justifyContent:"center"}}>
+              <svg width="22" height="16" viewBox="0 0 22 16" fill="none">
+                <path d="M1 8C1 8 4.5 1 11 1C17.5 1 21 8 21 8C21 8 17.5 15 11 15C4.5 15 1 8 1 8Z"
+                  stroke={cyan} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                <circle cx="11" cy="8" r="3" stroke={cyan} strokeWidth="1.5"/>
+                <circle cx="11" cy="8" r="1" fill={cyan}/>
+              </svg>
+            </div>
+
+            <p style={{fontSize:10,fontWeight:700,letterSpacing:"0.2em",color:cyan,
+              textTransform:"uppercase",margin:"0 0 10px"}}>Camera Required</p>
+            <h3 style={{margin:"0 0 12px",fontSize:18,fontWeight:700,letterSpacing:"-0.3px"}}>
+              Allow access to begin
+            </h3>
+            <p style={{color:"rgba(138,151,166,0.85)",fontSize:13,lineHeight:1.65,margin:"0 0 28px"}}>
+              IrisLens uses your camera to guide your iris into frame. Your image is processed on your device and never stored or uploaded.
             </p>
-            <button className="btn btn-primary" style={{padding:"14px",width:"100%"}}
-              onClick={()=>{setShowExplainer(false);setScreen("capture");}}>Allow Camera</button>
-            <button className="btn btn-ghost" style={{padding:"12px",width:"100%",marginTop:10}}
-              onClick={()=>setShowExplainer(false)}>Cancel</button>
+
+            <button className="btn btn-primary"
+              style={{padding:"15px",width:"100%",marginBottom:10,fontSize:13,
+                boxShadow:`0 0 24px rgba(0,212,255,0.2)`}}
+              onClick={()=>{setShowExplainer(false);setScreen("capture");}}>
+              Allow Camera
+            </button>
+            <button className="btn btn-ghost"
+              style={{padding:"13px",width:"100%",fontSize:13}}
+              onClick={()=>setShowExplainer(false)}>
+              Cancel
+            </button>
           </div>
         </div>
       )}
