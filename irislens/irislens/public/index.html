@@ -534,6 +534,7 @@ function IrisLens() {
       });
       const start = await startRes.json();
       if (!startRes.ok || !start.id) throw new Error(start.error || "Could not start generation");
+      const finalColor = start.confirmedColor || colorLabel;
       let output = null;
       for (let i = 0; i < 60; i++) {
         await new Promise(r => setTimeout(r, 1500));
@@ -549,7 +550,7 @@ function IrisLens() {
       if (!output) throw new Error("Generation timed out. Please try again.");
       const item = {
         url: output,
-        color: colorLabel,
+        color: finalColor,
         date: new Date().toLocaleDateString()
       };
       setResult(item);
