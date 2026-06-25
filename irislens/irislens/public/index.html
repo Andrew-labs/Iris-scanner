@@ -1,29 +1,19 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0, user-scalable=no" />
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0, user-scalable=no"/>
 <title>IrisLens</title>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet" />
-<style>
-  html, body { margin:0; padding:0; background:#070a0e; }
-  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
-</style>
+<style>html,body{margin:0;padding:0;background:#000;}</style>
 </head>
 <body>
 <div id="root"></div>
-
 <script type="module">
-  try {
-    const v = await import("https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.18");
-    window.visionTasks = v;
-    window.dispatchEvent(new Event("mp-ready"));
-  } catch(e) { console.error("MediaPipe load failed:", e); }
+  try{const v=await import("https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.18");window.visionTasks=v;window.dispatchEvent(new Event("mp-ready"));}
+  catch(e){console.error("MediaPipe load failed:",e);}
 </script>
-
 <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
 <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-
 <script>
 const {
   useRef,
@@ -38,26 +28,16 @@ const HOLD_MS = 1200;
 const ALIGN_TOL = 0.1;
 const CROP = 512;
 function classifyColor(h, s, l) {
-  // Achromatic — check before anything else
   if (l < 0.14) return "dark brown";
   if (s < 0.07) return "gray";
-  // Warm / brown family
   if (h < 40 || h > 330) {
-    if (l < 0.28) return "dark brown";
-    return "brown";
+    return l < 0.28 ? "dark brown" : "brown";
   }
-  // Amber — warm yellow-orange, must have meaningful saturation
   if (h >= 40 && h < 62 && s > 0.26) return "amber";
-  // Hazel — yellow-green range
   if (h >= 55 && h < 95 && s > 0.1) return "hazel";
-  // Green
   if (h >= 95 && h < 168) return "green";
-  // Blue-gray — cyan-blue boundary, lower saturation
-  if (h >= 168 && h < 205) return s < 0.2 ? "blue-gray" : "blue-gray";
-  // True blue — even light blue eyes have hue clearly above 200
-  // Keep blue-gray only if saturation is really low
+  if (h >= 168 && h < 205) return "blue-gray";
   if (h >= 205 && h < 265) return s < 0.11 ? "blue-gray" : "blue";
-  // Low-sat fallback
   if (s < 0.12) return "gray";
   return "brown";
 }
@@ -91,26 +71,22 @@ function rgbToHsl(r, g, b) {
 function HudOverlay({
   state
 }) {
-  const cyan = "#00d4ff";
-  const dim = "rgba(0,212,255,0.3)";
-  const mid = "rgba(0,212,255,0.6)";
-  const lockColor = state === "locking" || state === "capturing" ? cyan : dim;
-  const ringOpacity = state === "capturing" ? 1 : 0.7;
+  const c = "#00d4ff",
+    dim = "rgba(0,212,255,0.25)",
+    lock = state === "locking" || state === "capturing";
   const ticks = [];
   for (let i = 0; i < 72; i++) {
-    const angle = i * 5 * Math.PI / 180;
-    const isMajor = i % 9 === 0;
-    const r1 = isMajor ? 152 : 156,
-      r2 = 162;
+    const a = i * 5 * Math.PI / 180,
+      maj = i % 9 === 0;
     ticks.push(/*#__PURE__*/React.createElement("line", {
       key: i,
-      x1: 200 + r1 * Math.cos(angle),
-      y1: 200 + r1 * Math.sin(angle),
-      x2: 200 + r2 * Math.cos(angle),
-      y2: 200 + r2 * Math.sin(angle),
-      stroke: isMajor ? cyan : dim,
-      strokeWidth: isMajor ? 1.5 : 0.8,
-      opacity: ringOpacity
+      x1: 200 + (maj ? 151 : 155) * Math.cos(a),
+      y1: 200 + (maj ? 151 : 155) * Math.sin(a),
+      x2: 200 + 162 * Math.cos(a),
+      y2: 200 + 162 * Math.sin(a),
+      stroke: maj ? c : dim,
+      strokeWidth: maj ? 1.2 : 0.6,
+      opacity: "0.8"
     }));
   }
   return /*#__PURE__*/React.createElement("svg", {
@@ -119,8 +95,8 @@ function HudOverlay({
       position: "absolute",
       top: "50%",
       left: "50%",
-      width: "min(88vw,380px)",
-      height: "min(88vw,380px)",
+      width: "min(86vw,360px)",
+      height: "min(86vw,360px)",
       transform: "translate(-50%,-55%)",
       pointerEvents: "none",
       overflow: "visible"
@@ -131,183 +107,158 @@ function HudOverlay({
     r: "162",
     fill: "none",
     stroke: dim,
-    strokeWidth: "1",
-    strokeDasharray: "4 3",
-    opacity: ringOpacity
+    strokeWidth: "0.8",
+    strokeDasharray: "3 4"
   }), /*#__PURE__*/React.createElement("circle", {
     cx: "200",
     cy: "200",
-    r: "142",
+    r: "140",
     fill: "none",
-    stroke: lockColor,
-    strokeWidth: "1",
-    opacity: "0.5"
+    stroke: lock ? c : dim,
+    strokeWidth: "0.8",
+    opacity: "0.6"
   }), /*#__PURE__*/React.createElement("circle", {
     cx: "200",
     cy: "200",
-    r: "120",
+    r: "118",
     fill: "none",
-    stroke: lockColor,
-    strokeWidth: "2.5",
-    strokeDasharray: state === "locking" ? "30 8" : state === "capturing" ? "none" : "60 20",
+    stroke: lock ? c : dim,
+    strokeWidth: "2",
+    strokeDasharray: state === "locking" ? "28 8" : state === "capturing" ? "none" : "56 18",
     style: {
-      transition: "all 0.4s"
+      transition: "all 0.5s"
     }
   }), /*#__PURE__*/React.createElement("circle", {
     cx: "200",
     cy: "200",
-    r: "96",
+    r: "94",
     fill: "none",
     stroke: dim,
-    strokeWidth: "1",
-    strokeDasharray: "3 6"
+    strokeWidth: "0.8",
+    strokeDasharray: "2 5"
   }), /*#__PURE__*/React.createElement("path", {
-    d: "M 56 100 L 56 56 L 100 56",
+    d: "M60 108 L60 60 L108 60",
     fill: "none",
-    stroke: cyan,
-    strokeWidth: "2",
-    opacity: ringOpacity
+    stroke: c,
+    strokeWidth: "1.5",
+    opacity: "0.9"
   }), /*#__PURE__*/React.createElement("path", {
-    d: "M 300 56 L 344 56 L 344 100",
+    d: "M292 60 L340 60 L340 108",
     fill: "none",
-    stroke: cyan,
-    strokeWidth: "2",
-    opacity: ringOpacity
+    stroke: c,
+    strokeWidth: "1.5",
+    opacity: "0.9"
   }), /*#__PURE__*/React.createElement("path", {
-    d: "M 56 300 L 56 344 L 100 344",
+    d: "M60 292 L60 340 L108 340",
     fill: "none",
-    stroke: cyan,
-    strokeWidth: "2",
-    opacity: ringOpacity
+    stroke: c,
+    strokeWidth: "1.5",
+    opacity: "0.9"
   }), /*#__PURE__*/React.createElement("path", {
-    d: "M 300 344 L 344 344 L 344 300",
+    d: "M292 340 L340 340 L340 292",
     fill: "none",
-    stroke: cyan,
-    strokeWidth: "2",
-    opacity: ringOpacity
+    stroke: c,
+    strokeWidth: "1.5",
+    opacity: "0.9"
   }), /*#__PURE__*/React.createElement("line", {
     x1: "200",
-    y1: "72",
+    y1: "70",
     x2: "200",
-    y2: "88",
-    stroke: mid,
-    strokeWidth: "1.5"
+    y2: "84",
+    stroke: "rgba(0,212,255,0.5)",
+    strokeWidth: "1.2"
   }), /*#__PURE__*/React.createElement("line", {
     x1: "200",
-    y1: "312",
+    y1: "316",
     x2: "200",
-    y2: "328",
-    stroke: mid,
-    strokeWidth: "1.5"
+    y2: "330",
+    stroke: "rgba(0,212,255,0.5)",
+    strokeWidth: "1.2"
   }), /*#__PURE__*/React.createElement("line", {
-    x1: "72",
+    x1: "70",
     y1: "200",
-    x2: "88",
+    x2: "84",
     y2: "200",
-    stroke: mid,
-    strokeWidth: "1.5"
+    stroke: "rgba(0,212,255,0.5)",
+    strokeWidth: "1.2"
   }), /*#__PURE__*/React.createElement("line", {
-    x1: "312",
+    x1: "316",
     y1: "200",
-    x2: "328",
+    x2: "330",
     y2: "200",
-    stroke: mid,
-    strokeWidth: "1.5"
+    stroke: "rgba(0,212,255,0.5)",
+    strokeWidth: "1.2"
   }), /*#__PURE__*/React.createElement("text", {
-    x: "108",
-    y: "52",
-    fill: cyan,
-    fontSize: "9",
-    fontFamily: "Inter,monospace",
-    opacity: "0.7"
-  }, "IRIS.SCAN"), /*#__PURE__*/React.createElement("text", {
-    x: "264",
-    y: "52",
-    fill: cyan,
-    fontSize: "9",
-    fontFamily: "Inter,monospace",
-    opacity: "0.7",
-    textAnchor: "end"
-  }, "v2.4"), /*#__PURE__*/React.createElement("text", {
-    x: "56",
-    y: "360",
-    fill: cyan,
-    fontSize: "8",
-    fontFamily: "Inter,monospace",
-    opacity: "0.6"
-  }, "LAT: ", state === "capturing" ? "LOCKED" : "—"), /*#__PURE__*/React.createElement("text", {
-    x: "344",
-    y: "360",
-    fill: cyan,
+    x: "112",
+    y: "54",
+    fill: c,
     fontSize: "8",
     fontFamily: "Inter,monospace",
     opacity: "0.6",
-    textAnchor: "end"
-  }, state === "capturing" ? "CAPTURED" : state === "locking" ? "LOCKING..." : "SCANNING"), [0, 90, 180, 270].map(deg => {
+    letterSpacing: "2"
+  }, "IRIS.SCAN"), /*#__PURE__*/React.createElement("text", {
+    x: "288",
+    y: "54",
+    fill: c,
+    fontSize: "8",
+    fontFamily: "Inter,monospace",
+    opacity: "0.6",
+    textAnchor: "end",
+    letterSpacing: "2"
+  }, state === "capturing" ? "CAPTURED" : state === "locking" ? "LOCKING" : "SCANNING"), [0, 90, 180, 270].map(deg => {
     const a = deg * Math.PI / 180;
     return /*#__PURE__*/React.createElement("circle", {
       key: deg,
-      cx: 200 + 120 * Math.cos(a),
-      cy: 200 + 120 * Math.sin(a),
-      r: "4",
-      fill: state === "locking" || state === "capturing" ? cyan : "none",
-      stroke: cyan,
-      strokeWidth: "1.5",
-      opacity: ringOpacity
+      cx: 200 + 118 * Math.cos(a),
+      cy: 200 + 118 * Math.sin(a),
+      r: "3.5",
+      fill: lock ? c : "none",
+      stroke: c,
+      strokeWidth: "1.2",
+      opacity: "0.9"
     });
-  }), state === "capturing" && /*#__PURE__*/React.createElement("circle", {
-    cx: "200",
-    cy: "200",
-    r: "120",
-    fill: "none",
-    stroke: cyan,
-    strokeWidth: "6",
-    opacity: "0.9",
-    style: {
-      animation: "captureFlash 0.4s ease-out forwards"
-    }
   }));
 }
 function IrisLens() {
   const [screen, setScreen] = useState("home");
-  const [status, setStatus] = useState("Center your eye in the ring");
+  const [status, setStatus] = useState("Position your eye within the ring");
   const [hudState, setHudState] = useState("searching");
   const [permError, setPermError] = useState(null);
   const [showExplainer, setShowExplainer] = useState(false);
   const [result, setResult] = useState(null);
   const [gallery, setGallery] = useState([]);
   const [expanded, setExpanded] = useState(null);
-  const [procMsg, setProcMsg] = useState("Reading your iris…");
+  const [procMsg, setProcMsg] = useState("Reading iris geometry…");
   const [genError, setGenError] = useState(null);
-  const videoRef = useRef(null);
-  const streamRef = useRef(null);
-  const landmarkerRef = useRef(null);
-  const rafRef = useRef(null);
-  const holdStartRef = useRef(null);
-  const capturedRef = useRef(false);
-  const lastCropRef = useRef(null);
-  const lastColorRef = useRef("natural");
+  const videoRef = useRef(null),
+    streamRef = useRef(null),
+    landmarkerRef = useRef(null);
+  const rafRef = useRef(null),
+    holdStartRef = useRef(null),
+    capturedRef = useRef(false);
+  const lastCropRef = useRef(null),
+    lastColorRef = useRef("natural");
   const loadLandmarker = useCallback(async () => {
     if (landmarkerRef.current) return landmarkerRef.current;
-    let vision = window.visionTasks;
-    if (!vision) {
-      await new Promise((resolve, reject) => {
-        const t = setTimeout(() => reject(new Error("MediaPipe load timeout")), 20000);
+    let v = window.visionTasks;
+    if (!v) {
+      await new Promise((res, rej) => {
+        const t = setTimeout(() => rej(new Error("MediaPipe timeout")), 20000);
         window.addEventListener("mp-ready", () => {
           clearTimeout(t);
-          resolve();
+          res();
         }, {
           once: true
         });
       });
-      vision = window.visionTasks;
+      v = window.visionTasks;
     }
     const {
       FaceLandmarker,
       FilesetResolver
-    } = vision;
-    const fileset = await FilesetResolver.forVisionTasks(CDN_WASM);
-    const lm = await FaceLandmarker.createFromOptions(fileset, {
+    } = v;
+    const fs = await FilesetResolver.forVisionTasks(CDN_WASM);
+    const lm = await FaceLandmarker.createFromOptions(fs, {
       baseOptions: {
         modelAssetPath: MODEL_URL,
         delegate: "GPU"
@@ -345,7 +296,7 @@ function IrisLens() {
       setHudState("searching");
       loop();
     } catch (e) {
-      if (e.name === "NotAllowedError") setPermError("Camera access blocked. Enable it in browser settings.");else if (e.name === "NotFoundError") setPermError("No camera found on this device.");else setPermError("Could not start camera: " + e.message);
+      if (e.name === "NotAllowedError") setPermError("Camera access was denied. Please enable it in your browser settings.");else if (e.name === "NotFoundError") setPermError("No camera detected on this device.");else setPermError("Camera unavailable: " + e.message);
     }
   }, [loadLandmarker]);
   const stopCamera = useCallback(() => {
@@ -367,19 +318,19 @@ function IrisLens() {
       rafRef.current = requestAnimationFrame(loop);
       return;
     }
-    if (!res.faceLandmarks || !res.faceLandmarks.length) {
+    if (!res.faceLandmarks?.length) {
       setStatus("Position your eye within the ring");
       setHudState("searching");
       holdStartRef.current = null;
     } else {
-      const pts = res.faceLandmarks[0];
-      const iris = R_IRIS.map(i => pts[i]);
-      const cx = iris.reduce((a, p) => a + p.x, 0) / 4;
-      const cy = iris.reduce((a, p) => a + p.y, 0) / 4;
+      const pts = res.faceLandmarks[0],
+        iris = R_IRIS.map(i => pts[i]);
+      const cx = iris.reduce((a, p) => a + p.x, 0) / 4,
+        cy = iris.reduce((a, p) => a + p.y, 0) / 4;
       const rad = Math.max(...iris.map(p => Math.hypot(p.x - cx, p.y - cy)));
       const dist = Math.hypot(cx - 0.5, cy - 0.5);
       if (dist > ALIGN_TOL * 1.6) {
-        setStatus("Center your eye");
+        setStatus("Centre your eye");
         setHudState("searching");
         holdStartRef.current = null;
       } else if (rad < 0.018) {
@@ -391,7 +342,7 @@ function IrisLens() {
         setHudState("searching");
         holdStartRef.current = null;
       } else if (dist > ALIGN_TOL) {
-        setStatus("Align to center");
+        setStatus("Align to centre");
         setHudState("aligning");
         holdStartRef.current = null;
       } else {
@@ -410,8 +361,8 @@ function IrisLens() {
     rafRef.current = requestAnimationFrame(loop);
   }, []);
   const capture = useCallback((ncx, ncy, nrad) => {
-    const video = videoRef.current;
-    const vw = video.videoWidth,
+    const video = videoRef.current,
+      vw = video.videoWidth,
       vh = video.videoHeight;
     const pad = 3.2,
       radPx = nrad * vw * pad,
@@ -424,12 +375,8 @@ function IrisLens() {
     ctx.drawImage(video, cxPx - radPx, cyPx - radPx, radPx * 2, radPx * 2, 0, 0, CROP, CROP);
     const d = ctx.getImageData(0, 0, CROP, CROP).data;
     const cxp = CROP / 2,
-      cyp = CROP / 2;
-    // Iris radius in the crop: crop spans pad*2*irisRadius, so irisR = CROP/(2*pad)
-    const irisR = CROP / (2 * 3.2); // ~80px
-
-    // ── 1. Sclera white-balance correction ───────────────────────────────────
-    // Bright pixels outside the iris = sclera = should be near-white
+      cyp = CROP / 2,
+      irisR = CROP / (2 * 3.2);
     let sr = 0,
       sg = 0,
       sb = 0,
@@ -451,7 +398,6 @@ function IrisLens() {
         }
       }
     }
-    // Per-channel correction: shift sclera to neutral white, cap at 1.55x
     let wr = 1,
       wg = 1,
       wb = 1;
@@ -464,11 +410,8 @@ function IrisLens() {
       wg = Math.min(mx / ag, 1.55);
       wb = Math.min(mx / ab, 1.55);
     }
-
-    // ── 2. Ring sampling: exclude pupil (inner 32%) + limbal ring (outer 16%) ─
     const ringIn = irisR * 0.32,
       ringOut = irisR * 0.84;
-    // Hue histogram: 72 bins × 5°, weighted by saturation² to suppress noise
     const bins = new Float32Array(72);
     let wsSum = 0,
       wlSum = 0,
@@ -489,22 +432,15 @@ function IrisLens() {
         wCount++;
       }
     }
-
-    // ── 3. Smooth histogram + peak = dominant hue ─────────────────────────────
     const sm = new Float32Array(72);
-    for (let i = 0; i < 72; i++) {
-      sm[i] = (bins[(i - 2 + 72) % 72] + bins[(i - 1 + 72) % 72] * 2 + bins[i] * 3 + bins[(i + 1) % 72] * 2 + bins[(i + 2) % 72]) / 9;
+    for (let i = 0; i < 72; i++) sm[i] = (bins[(i - 2 + 72) % 72] + bins[(i - 1 + 72) % 72] * 2 + bins[i] * 3 + bins[(i + 1) % 72] * 2 + bins[(i + 2) % 72]) / 9;
+    let pk = 0,
+      pv = 0;
+    for (let i = 0; i < 72; i++) if (sm[i] > pv) {
+      pv = sm[i];
+      pk = i;
     }
-    let peakBin = 0,
-      peakVal = 0;
-    for (let i = 0; i < 72; i++) if (sm[i] > peakVal) {
-      peakVal = sm[i];
-      peakBin = i;
-    }
-    const dominantHue = peakBin * 5 + 2.5;
-    const meanS = wCount > 0 ? wsSum / wCount : 0;
-    const meanL = wCount > 0 ? wlSum / wCount : 0;
-    const colorLabel = classifyColor(dominantHue, meanS, meanL);
+    const colorLabel = classifyColor(pk * 5 + 2.5, wCount > 0 ? wsSum / wCount : 0, wCount > 0 ? wlSum / wCount : 0);
     const dataUrl = c.toDataURL("image/jpeg", 0.9);
     lastCropRef.current = dataUrl;
     lastColorRef.current = colorLabel;
@@ -520,7 +456,7 @@ function IrisLens() {
     const t = setInterval(() => {
       mi = (mi + 1) % msgs.length;
       setProcMsg(msgs[mi]);
-    }, 2800);
+    }, 3000);
     try {
       const startRes = await fetch("/api/generate", {
         method: "POST",
@@ -567,29 +503,34 @@ function IrisLens() {
       if (screen === "capture") stopCamera();
     };
   }, [screen]);
-  const cyan = "#00d4ff";
+  const C = "#00d4ff";
   return /*#__PURE__*/React.createElement("div", {
     style: {
       minHeight: "100vh",
-      background: "#070a0e",
-      color: "#e8ecf2",
-      fontFamily: "Inter, Roboto, system-ui, sans-serif",
+      background: "#000",
+      color: "#fff",
+      fontFamily: "'Inter', system-ui, sans-serif",
       overflowX: "hidden"
     }
   }, /*#__PURE__*/React.createElement("style", null, `
-        @keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(0,212,255,.4);}50%{box-shadow:0 0 28px 5px rgba(0,212,255,.5);}}
+        @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;1,300;1,400&family=Inter:wght@300;400;500;600&display=swap');
+        *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
         @keyframes spin{to{transform:rotate(360deg);}}
-        @keyframes glow{0%,100%{opacity:.4}50%{opacity:1}}
-        @keyframes scanline{0%{transform:translateY(-100%);opacity:0;}20%{opacity:1;}80%{opacity:1;}100%{transform:translateY(100%);opacity:0;}}
+        @keyframes pulse{0%,100%{opacity:.4}50%{opacity:1}}
+        @keyframes fadeUp{from{opacity:0;transform:translateY(32px);}to{opacity:1;transform:translateY(0);}}
+        @keyframes irisReveal{0%{opacity:0;filter:blur(24px) brightness(.3);transform:scale(1.04);}100%{opacity:1;filter:blur(0) brightness(1);transform:scale(1);}}
+        @keyframes lineGrow{from{transform:scaleX(0);transform-origin:left;}to{transform:scaleX(1);transform-origin:left;}}
+        @keyframes scanline{0%{transform:translateY(-100%);opacity:0;}20%{opacity:.8;}80%{opacity:.8;}100%{transform:translateY(100%);opacity:0;}}
         @keyframes captureFlash{0%{opacity:1;}100%{opacity:0;}}
-        @keyframes fadeUp{from{opacity:0;transform:translateY(20px);}to{opacity:1;transform:translateY(0);}}
-        @keyframes revealIris{from{opacity:0;transform:scale(0.92);}to{opacity:1;transform:scale(1);}}
-        .btn{min-height:48px;border:none;font-weight:600;font-size:14px;cursor:pointer;transition:all .2s;font-family:inherit;letter-spacing:.06em;text-transform:uppercase;}
-        .btn-primary{background:${cyan};color:#03181f;border-radius:3px;}
-        .btn-primary:hover{filter:brightness(1.12);}
-        .btn-ghost{background:transparent;color:rgba(207,233,245,0.7);border:1px solid rgba(0,212,255,.2);border-radius:3px;}
-        .btn-ghost:hover{border-color:rgba(0,212,255,.5);color:#e8ecf2;}
-        @media(prefers-reduced-motion:reduce){*{animation:none!important}}
+        .display{font-family:'Cormorant Garamond',serif;font-weight:300;letter-spacing:-.02em;line-height:.96;}
+        .label{font-size:10px;font-weight:500;letter-spacing:.28em;text-transform:uppercase;color:rgba(255,255,255,.4);}
+        .btn-ghost{background:transparent;border:1px solid rgba(255,255,255,.18);color:rgba(255,255,255,.7);padding:14px 28px;font-family:'Inter',sans-serif;font-size:11px;font-weight:500;letter-spacing:.16em;text-transform:uppercase;cursor:pointer;transition:all .3s;min-height:48px;}
+        .btn-ghost:hover{border-color:rgba(255,255,255,.5);color:#fff;}
+        .btn-primary{background:#fff;border:none;color:#000;padding:16px 40px;font-family:'Inter',sans-serif;font-size:11px;font-weight:600;letter-spacing:.18em;text-transform:uppercase;cursor:pointer;transition:all .3s;min-height:48px;}
+        .btn-primary:hover{background:rgba(255,255,255,.88);}
+        .btn-cyan{background:transparent;border:1px solid ${C};color:${C};padding:16px 40px;font-family:'Inter',sans-serif;font-size:11px;font-weight:500;letter-spacing:.18em;text-transform:uppercase;cursor:pointer;transition:all .3s;min-height:48px;}
+        .btn-cyan:hover{background:rgba(0,212,255,.06);}
+        @media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
       `), screen === "home" && /*#__PURE__*/React.createElement("div", {
     style: {
       height: "100vh",
@@ -597,7 +538,7 @@ function IrisLens() {
       flexDirection: "column",
       position: "relative",
       overflow: "hidden",
-      background: "#070a0e"
+      background: "#000"
     }
   }, /*#__PURE__*/React.createElement("div", {
     style: {
@@ -611,46 +552,76 @@ function IrisLens() {
       width: "100%",
       height: "100%",
       objectFit: "cover",
-      objectPosition: "50% 68%",
-      // show the eye/face area, not the top of head
-      display: "block"
+      objectPosition: "50% 62%",
+      display: "block",
+      filter: "brightness(0.3) contrast(1.1)",
+      transform: "scale(1.02)"
     }
   }), /*#__PURE__*/React.createElement("div", {
     style: {
       position: "absolute",
       inset: 0,
-      background: "linear-gradient(to bottom, rgba(7,10,14,0.55) 0%, rgba(7,10,14,0.1) 35%, rgba(7,10,14,0.15) 55%, rgba(7,10,14,0.92) 78%, #070a0e 100%)"
+      background: "radial-gradient(ellipse 70% 60% at 55% 42%, rgba(0,0,0,0.1) 0%, rgba(0,0,0,0.7) 60%, rgba(0,0,0,0.95) 100%)"
     }
   }), /*#__PURE__*/React.createElement("div", {
     style: {
       position: "absolute",
       inset: 0,
-      background: "linear-gradient(to right, rgba(7,10,14,0.6) 0%, transparent 40%, transparent 60%, rgba(7,10,14,0.6) 100%)"
+      background: "linear-gradient(to right, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0.4) 50%, rgba(0,0,0,0.6) 100%)"
+    }
+  }), /*#__PURE__*/React.createElement("div", {
+    style: {
+      position: "absolute",
+      bottom: 0,
+      left: 0,
+      right: 0,
+      height: "50%",
+      background: "linear-gradient(to bottom, transparent 0%, #000 100%)"
     }
   })), /*#__PURE__*/React.createElement("div", {
     style: {
       position: "relative",
       zIndex: 2,
-      padding: "22px 28px",
+      padding: "28px 36px",
       display: "flex",
       alignItems: "center",
       justifyContent: "space-between"
     }
-  }, /*#__PURE__*/React.createElement("span", {
+  }, /*#__PURE__*/React.createElement("div", {
     style: {
-      fontSize: 18,
-      fontWeight: 800,
-      letterSpacing: "-0.3px"
+      display: "flex",
+      alignItems: "center",
+      gap: 8
     }
-  }, "Iris", /*#__PURE__*/React.createElement("span", {
+  }, /*#__PURE__*/React.createElement("div", {
     style: {
-      color: cyan
+      width: 20,
+      height: 20,
+      borderRadius: "50%",
+      border: `1px solid ${C}`,
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center"
     }
-  }, "Lens")), /*#__PURE__*/React.createElement("button", {
-    className: "btn btn-ghost",
+  }, /*#__PURE__*/React.createElement("div", {
     style: {
-      padding: "8px 14px",
-      fontSize: 11
+      width: 6,
+      height: 6,
+      borderRadius: "50%",
+      background: C
+    }
+  })), /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 13,
+      fontWeight: 500,
+      letterSpacing: ".12em",
+      textTransform: "uppercase"
+    }
+  }, "IrisLens")), /*#__PURE__*/React.createElement("button", {
+    className: "btn-ghost",
+    style: {
+      padding: "8px 16px",
+      fontSize: "10px"
     },
     onClick: () => setScreen("gallery")
   }, "Gallery")), /*#__PURE__*/React.createElement("div", {
@@ -658,46 +629,70 @@ function IrisLens() {
       position: "relative",
       zIndex: 2,
       marginTop: "auto",
-      padding: "0 32px 52px",
-      animation: "fadeUp 0.7s ease-out forwards"
+      padding: "0 36px 56px",
+      animation: "fadeUp 1s cubic-bezier(0.16,1,0.3,1) forwards"
     }
-  }, /*#__PURE__*/React.createElement("p", {
+  }, /*#__PURE__*/React.createElement("div", {
     style: {
-      fontSize: 10,
-      fontWeight: 700,
-      letterSpacing: "0.25em",
-      color: cyan,
-      margin: "0 0 14px",
-      textTransform: "uppercase"
+      display: "flex",
+      alignItems: "center",
+      gap: 12,
+      marginBottom: 20
     }
-  }, "AI Iris Portrait"), /*#__PURE__*/React.createElement("h1", {
+  }, /*#__PURE__*/React.createElement("div", {
     style: {
-      fontSize: "clamp(34px,8vw,52px)",
-      fontWeight: 800,
-      lineHeight: 1.05,
-      margin: "0 0 16px",
-      letterSpacing: "-1.5px",
-      maxWidth: 480
+      width: 24,
+      height: 1,
+      background: C,
+      opacity: .7
     }
-  }, "See your iris", /*#__PURE__*/React.createElement("br", null), "like never before."), /*#__PURE__*/React.createElement("p", {
+  }), /*#__PURE__*/React.createElement("span", {
+    className: "label",
     style: {
-      color: "rgba(138,151,166,0.9)",
-      fontSize: 14,
-      lineHeight: 1.7,
+      color: C,
+      opacity: .9
+    }
+  }, "AI Iris Portrait")), /*#__PURE__*/React.createElement("h1", {
+    className: "display",
+    style: {
+      fontSize: "clamp(52px,11vw,80px)",
+      margin: "0 0 4px",
+      color: "#fff"
+    }
+  }, "Reveal your"), /*#__PURE__*/React.createElement("h1", {
+    className: "display",
+    style: {
+      fontSize: "clamp(52px,11vw,80px)",
       margin: "0 0 36px",
-      maxWidth: 360
+      color: "rgba(255,255,255,.55)",
+      fontStyle: "italic"
+    }
+  }, "iris."), /*#__PURE__*/React.createElement("div", {
+    style: {
+      height: 1,
+      width: 48,
+      background: "rgba(255,255,255,.2)",
+      marginBottom: 28,
+      animation: "lineGrow 1.2s 0.3s ease-out both"
+    }
+  }), /*#__PURE__*/React.createElement("p", {
+    style: {
+      fontSize: 13,
+      fontWeight: 300,
+      lineHeight: 1.8,
+      color: "rgba(255,255,255,.45)",
+      maxWidth: 300,
+      margin: "0 0 44px",
+      letterSpacing: ".01em"
     }
   }, "Advanced iris detection renders your unique eye structure in hyperreal macro detail."), /*#__PURE__*/React.createElement("button", {
-    className: "btn btn-primary",
+    className: "btn-cyan",
     style: {
-      padding: "18px 0",
       width: "100%",
-      maxWidth: 360,
-      fontSize: 14,
-      boxShadow: `0 0 32px rgba(0,212,255,0.25)`
+      maxWidth: 340
     },
     onClick: () => setShowExplainer(true)
-  }, "Capture My Iris"))), screen === "capture" && /*#__PURE__*/React.createElement("div", {
+  }, "Begin Capture"))), screen === "capture" && /*#__PURE__*/React.createElement("div", {
     style: {
       position: "fixed",
       inset: 0,
@@ -718,7 +713,7 @@ function IrisLens() {
     style: {
       position: "absolute",
       inset: 0,
-      background: "radial-gradient(ellipse 60% 55% at 50% 42%, transparent 40%, rgba(0,0,0,0.75) 100%)",
+      background: "radial-gradient(ellipse 58% 52% at 50% 42%, transparent 38%, rgba(0,0,0,.82) 100%)",
       pointerEvents: "none"
     }
   }), !permError && /*#__PURE__*/React.createElement(HudOverlay, {
@@ -728,30 +723,28 @@ function IrisLens() {
       position: "absolute",
       top: "50%",
       left: "50%",
-      width: "min(67vw,280px)",
-      height: "2px",
+      width: "min(65vw,268px)",
+      height: "1px",
       transform: "translate(-50%,-55%)",
-      background: `linear-gradient(to right, transparent, ${cyan}, transparent)`,
+      background: `linear-gradient(to right, transparent, ${C}, transparent)`,
       animation: "scanline 1.8s ease-in-out infinite",
       pointerEvents: "none",
-      opacity: 0.7
+      opacity: .6
     }
   }), !permError && /*#__PURE__*/React.createElement("div", {
     style: {
       position: "absolute",
-      bottom: "max(110px,14vh)",
+      bottom: "max(108px,13vh)",
       left: 0,
       right: 0,
       textAlign: "center"
     }
   }, /*#__PURE__*/React.createElement("span", {
+    className: "label",
     style: {
-      fontSize: 11,
-      fontWeight: 700,
-      letterSpacing: "0.22em",
-      textTransform: "uppercase",
-      color: cyan,
-      textShadow: "0 0 20px rgba(0,212,255,0.8)"
+      color: C,
+      textShadow: "0 0 20px rgba(0,212,255,.6)",
+      letterSpacing: ".22em"
     }
   }, status)), permError && /*#__PURE__*/React.createElement("div", {
     style: {
@@ -761,228 +754,171 @@ function IrisLens() {
       flexDirection: "column",
       alignItems: "center",
       justifyContent: "center",
-      padding: 32,
+      padding: 40,
       textAlign: "center",
-      background: "rgba(5,8,12,.92)"
+      background: "rgba(0,0,0,.92)"
     }
   }, /*#__PURE__*/React.createElement("p", {
+    className: "label",
     style: {
-      fontSize: 15,
-      marginBottom: 24,
-      maxWidth: 300
+      color: "rgba(255,255,255,.4)",
+      marginBottom: 12
+    }
+  }, "Camera Error"), /*#__PURE__*/React.createElement("p", {
+    style: {
+      fontSize: 14,
+      fontWeight: 300,
+      lineHeight: 1.7,
+      marginBottom: 36,
+      maxWidth: 280,
+      color: "rgba(255,255,255,.7)"
     }
   }, permError), /*#__PURE__*/React.createElement("button", {
-    className: "btn btn-primary",
-    style: {
-      padding: "14px 32px"
-    },
+    className: "btn-primary",
     onClick: startCamera
   }, "Try Again"), /*#__PURE__*/React.createElement("button", {
-    className: "btn btn-ghost",
+    className: "btn-ghost",
     style: {
-      padding: "12px 28px",
       marginTop: 12
     },
     onClick: () => setScreen("home")
-  }, "Back")), /*#__PURE__*/React.createElement("div", {
+  }, "Cancel")), /*#__PURE__*/React.createElement("div", {
     style: {
       position: "absolute",
-      bottom: "max(36px,env(safe-area-inset-bottom))",
+      bottom: "max(40px,env(safe-area-inset-bottom))",
       left: 0,
       right: 0,
       display: "flex",
-      alignItems: "center",
-      justifyContent: "space-between",
-      padding: "0 32px"
+      justifyContent: "center"
     }
   }, /*#__PURE__*/React.createElement("button", {
-    className: "btn btn-ghost",
+    onClick: () => setScreen("home"),
     style: {
+      background: "transparent",
+      border: "1px solid rgba(255,255,255,.15)",
+      color: "rgba(255,255,255,.4)",
       width: 44,
       height: 44,
-      padding: 0,
-      borderRadius: "50%",
-      fontSize: 18,
+      cursor: "pointer",
       display: "flex",
       alignItems: "center",
-      justifyContent: "center"
-    },
-    onClick: () => setScreen("home")
-  }, "✕"), /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontSize: 9,
-      color: "rgba(0,212,255,0.45)",
-      letterSpacing: "0.18em",
-      textTransform: "uppercase"
+      justifyContent: "center",
+      fontSize: 16,
+      borderRadius: "50%"
     }
-  }, hudState === "capturing" ? "Captured" : hudState === "locking" ? "Locking…" : "Scanning"), /*#__PURE__*/React.createElement("div", {
-    style: {
-      width: 44
-    }
-  }))), screen === "processing" && /*#__PURE__*/React.createElement("div", {
+  }, "✕"))), screen === "processing" && /*#__PURE__*/React.createElement("div", {
     style: {
       minHeight: "100vh",
       display: "flex",
       flexDirection: "column",
       alignItems: "center",
       justifyContent: "center",
-      padding: 32,
-      textAlign: "center"
+      padding: "0 36px",
+      textAlign: "center",
+      background: "#000"
     }
   }, !genError ? /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
     style: {
       position: "relative",
-      width: 140,
-      height: 140,
-      marginBottom: 40
+      width: 80,
+      height: 80,
+      marginBottom: 56
     }
   }, /*#__PURE__*/React.createElement("div", {
     style: {
       position: "absolute",
       inset: 0,
       borderRadius: "50%",
-      border: "1.5px solid rgba(0,212,255,0.12)"
-    }
-  }), /*#__PURE__*/React.createElement("div", {
-    style: {
-      position: "absolute",
-      inset: 14,
-      borderRadius: "50%",
-      border: "1px dashed rgba(0,212,255,0.15)"
-    }
-  }), /*#__PURE__*/React.createElement("div", {
-    style: {
-      position: "absolute",
-      inset: 28,
-      borderRadius: "50%",
-      border: "1.5px solid rgba(0,212,255,0.12)"
+      border: "1px solid rgba(255,255,255,.06)"
     }
   }), /*#__PURE__*/React.createElement("div", {
     style: {
       position: "absolute",
       inset: 0,
-      borderRadius: "50%",
-      border: "2px solid transparent",
-      borderTopColor: cyan,
-      animation: "spin 1.2s linear infinite"
-    }
-  }), /*#__PURE__*/React.createElement("div", {
-    style: {
-      position: "absolute",
-      inset: 18,
       borderRadius: "50%",
       border: "1px solid transparent",
-      borderTopColor: "rgba(0,212,255,0.4)",
-      animation: "spin 2s linear infinite reverse"
+      borderTopColor: "rgba(255,255,255,.5)",
+      animation: "spin 2s linear infinite"
     }
   }), /*#__PURE__*/React.createElement("div", {
     style: {
       position: "absolute",
-      inset: 0,
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "center"
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      width: 10,
-      height: 10,
+      inset: 12,
       borderRadius: "50%",
-      background: cyan,
-      animation: "pulse 1.5s ease-in-out infinite"
+      border: "1px solid transparent",
+      borderTopColor: C,
+      animation: "spin 1.4s linear infinite reverse",
+      opacity: .7
     }
-  }))), /*#__PURE__*/React.createElement("p", {
+  })), /*#__PURE__*/React.createElement("p", {
+    className: "display",
     style: {
-      color: cyan,
-      fontSize: 12,
-      fontWeight: 700,
-      letterSpacing: "0.18em",
-      textTransform: "uppercase",
-      animation: "glow 2s infinite",
-      marginBottom: 10
+      fontSize: "clamp(28px,6vw,42px)",
+      margin: "0 0 16px",
+      color: "rgba(255,255,255,.9)"
     }
-  }, procMsg), /*#__PURE__*/React.createElement("p", {
+  }, procMsg), /*#__PURE__*/React.createElement("span", {
+    className: "label",
     style: {
-      color: "rgba(58,72,86,0.9)",
-      fontSize: 11,
-      letterSpacing: "0.1em",
-      textTransform: "uppercase"
+      color: "rgba(255,255,255,.2)"
     }
-  }, "AI rendering — up to 30 seconds")) : /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("p", {
+  }, "AI rendering — up to 30 seconds")) : /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("span", {
+    className: "label",
     style: {
-      fontSize: 14,
-      color: "#e8ecf2",
-      marginBottom: 8
+      color: "rgba(255,255,255,.3)",
+      marginBottom: 16
     }
-  }, "Generation failed"), /*#__PURE__*/React.createElement("p", {
+  }, "Generation Failed"), /*#__PURE__*/React.createElement("p", {
     style: {
-      color: "#8a97a6",
       fontSize: 13,
-      marginBottom: 28,
-      maxWidth: 300
+      fontWeight: 300,
+      color: "rgba(255,255,255,.5)",
+      maxWidth: 280,
+      marginBottom: 40,
+      lineHeight: 1.7
     }
   }, genError), /*#__PURE__*/React.createElement("button", {
-    className: "btn btn-primary",
-    style: {
-      padding: "14px 32px"
-    },
+    className: "btn-primary",
     onClick: () => {
       setGenError(null);
-      if (lastCropRef.current) generate(lastCropRef.current, lastColorRef.current);else setScreen("capture");
+      lastCropRef.current ? generate(lastCropRef.current, lastColorRef.current) : setScreen("capture");
     }
   }, "Try Again"), /*#__PURE__*/React.createElement("button", {
-    className: "btn btn-ghost",
+    className: "btn-ghost",
     style: {
-      padding: "12px 28px",
       marginTop: 12
     },
     onClick: () => setScreen("home")
-  }, "Home"))), result && screen === "results" && /*#__PURE__*/React.createElement("div", {
+  }, "Home"))), screen === "results" && result && /*#__PURE__*/React.createElement("div", {
     style: {
       minHeight: "100vh",
       display: "flex",
       flexDirection: "column",
       alignItems: "center",
-      background: "#070a0e",
-      position: "relative",
-      overflow: "hidden"
+      justifyContent: "space-between",
+      background: "#000",
+      padding: "0 24px"
     }
   }, /*#__PURE__*/React.createElement("div", {
     style: {
-      position: "absolute",
-      top: "18%",
-      left: "50%",
-      transform: "translateX(-50%)",
-      width: "70vw",
-      height: "70vw",
-      maxWidth: 500,
-      maxHeight: 500,
-      borderRadius: "50%",
-      background: "radial-gradient(circle, rgba(0,212,255,0.07) 0%, transparent 70%)",
-      pointerEvents: "none"
-    }
-  }), /*#__PURE__*/React.createElement("div", {
-    style: {
-      paddingTop: "max(28px,env(safe-area-inset-top))",
-      paddingBottom: 20,
       width: "100%",
+      maxWidth: 480,
       display: "flex",
-      alignItems: "center",
       justifyContent: "space-between",
-      padding: "24px 28px 0"
+      padding: "28px 0"
     }
   }, /*#__PURE__*/React.createElement("button", {
-    className: "btn btn-ghost",
+    className: "btn-ghost",
     style: {
-      padding: "8px 14px",
-      fontSize: 11
+      padding: "9px 16px",
+      fontSize: "10px"
     },
     onClick: () => setScreen("home")
   }, "← Home"), /*#__PURE__*/React.createElement("button", {
-    className: "btn btn-ghost",
+    className: "btn-ghost",
     style: {
-      padding: "8px 14px",
-      fontSize: 11
+      padding: "9px 16px",
+      fontSize: "10px"
     },
     onClick: () => setScreen("gallery")
   }, "Gallery")), /*#__PURE__*/React.createElement("div", {
@@ -991,8 +927,8 @@ function IrisLens() {
       display: "flex",
       alignItems: "center",
       justifyContent: "center",
-      padding: "16px 24px",
-      animation: "revealIris 0.8s cubic-bezier(0.16,1,0.3,1) forwards"
+      width: "100%",
+      padding: "16px 0"
     }
   }, /*#__PURE__*/React.createElement("div", {
     style: {
@@ -1001,17 +937,9 @@ function IrisLens() {
   }, /*#__PURE__*/React.createElement("div", {
     style: {
       position: "absolute",
-      inset: -20,
+      inset: -28,
       borderRadius: "50%",
-      border: "1px solid rgba(0,212,255,0.1)",
-      pointerEvents: "none"
-    }
-  }), /*#__PURE__*/React.createElement("div", {
-    style: {
-      position: "absolute",
-      inset: -36,
-      borderRadius: "50%",
-      border: "1px dashed rgba(0,212,255,0.06)",
+      border: "1px solid rgba(255,255,255,.04)",
       pointerEvents: "none"
     }
   }), /*#__PURE__*/React.createElement("div", {
@@ -1019,24 +947,34 @@ function IrisLens() {
       position: "absolute",
       inset: -52,
       borderRadius: "50%",
-      border: "1px solid rgba(0,212,255,0.04)",
+      border: "1px solid rgba(255,255,255,.025)",
+      pointerEvents: "none"
+    }
+  }), /*#__PURE__*/React.createElement("div", {
+    style: {
+      position: "absolute",
+      inset: -80,
+      borderRadius: "50%",
+      border: "1px solid rgba(0,212,255,.04)",
       pointerEvents: "none"
     }
   }), /*#__PURE__*/React.createElement("img", {
     src: result.url,
-    alt: "Your iris",
+    alt: "Your iris portrait",
     style: {
-      width: "min(82vw,440px)",
-      height: "min(82vw,440px)",
+      width: "min(80vw,420px)",
+      height: "min(80vw,420px)",
       borderRadius: "50%",
       objectFit: "cover",
       display: "block",
-      boxShadow: [`0 0 0 1px rgba(0,212,255,0.18)`, `0 0 40px rgba(0,212,255,0.14)`, `0 0 100px rgba(0,212,255,0.08)`, `0 0 180px rgba(0,212,255,0.04)`].join(",")
+      animation: "irisReveal 1.8s cubic-bezier(0.25,0.46,0.45,0.94) forwards",
+      boxShadow: "0 0 0 1px rgba(255,255,255,.06), 0 0 60px rgba(0,0,0,.8)"
     }
   }))), /*#__PURE__*/React.createElement("div", {
     style: {
       width: "100%",
-      padding: "0 28px 48px",
+      maxWidth: 420,
+      paddingBottom: "max(52px,env(safe-area-inset-bottom))",
       textAlign: "center"
     }
   }, /*#__PURE__*/React.createElement("div", {
@@ -1047,33 +985,33 @@ function IrisLens() {
       gap: 10,
       marginBottom: 32
     }
-  }, /*#__PURE__*/React.createElement("span", {
+  }, /*#__PURE__*/React.createElement("div", {
     style: {
-      width: 8,
-      height: 8,
+      width: 6,
+      height: 6,
       borderRadius: "50%",
       background: SWATCH[result.color] || "#777",
-      boxShadow: `0 0 6px ${SWATCH[result.color] || "#777"}66`
+      boxShadow: `0 0 8px ${SWATCH[result.color] || "#777"}`
     }
   }), /*#__PURE__*/React.createElement("span", {
-    style: {
-      fontSize: 10,
-      fontWeight: 700,
-      letterSpacing: "0.22em",
-      color: "rgba(138,151,166,0.8)",
-      textTransform: "uppercase"
-    }
+    className: "label"
   }, result.color)), /*#__PURE__*/React.createElement("div", {
     style: {
+      height: 1,
+      background: "rgba(255,255,255,.06)",
+      marginBottom: 28
+    }
+  }), /*#__PURE__*/React.createElement("div", {
+    style: {
       display: "flex",
-      gap: 10,
+      gap: 8,
       justifyContent: "center"
     }
   }, /*#__PURE__*/React.createElement("button", {
-    className: "btn btn-primary",
+    className: "btn-primary",
     style: {
-      padding: "14px 28px",
-      fontSize: 12
+      padding: "14px 32px",
+      fontSize: "11px"
     },
     onClick: async () => {
       try {
@@ -1089,11 +1027,7 @@ function IrisLens() {
       }
     }
   }, "Save"), /*#__PURE__*/React.createElement("button", {
-    className: "btn btn-ghost",
-    style: {
-      padding: "14px 28px",
-      fontSize: 12
-    },
+    className: "btn-ghost",
     onClick: async () => {
       try {
         const blob = await (await fetch(result.url)).blob();
@@ -1109,60 +1043,67 @@ function IrisLens() {
       } catch {}
     }
   }, "Share"), /*#__PURE__*/React.createElement("button", {
-    className: "btn btn-ghost",
-    style: {
-      padding: "14px 20px",
-      fontSize: 12
-    },
+    className: "btn-ghost",
     onClick: () => setScreen("capture")
-  }, "Again")))), screen === "gallery" && /*#__PURE__*/React.createElement("div", {
+  }, "Retake")))), screen === "gallery" && /*#__PURE__*/React.createElement("div", {
     style: {
       minHeight: "100vh",
-      padding: "32px 20px"
+      background: "#000",
+      padding: "36px 28px"
     }
   }, /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
-      alignItems: "center",
+      alignItems: "baseline",
       justifyContent: "space-between",
-      marginBottom: 28
+      marginBottom: 48
     }
-  }, /*#__PURE__*/React.createElement("h2", {
+  }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("span", {
+    className: "label",
     style: {
-      fontSize: 20,
-      fontWeight: 800,
-      margin: 0,
-      letterSpacing: "-0.5px"
+      display: "block",
+      marginBottom: 8
     }
-  }, "Gallery"), /*#__PURE__*/React.createElement("button", {
-    className: "btn btn-ghost",
+  }, "Collection"), /*#__PURE__*/React.createElement("h2", {
+    className: "display",
+    style: {
+      fontSize: 40,
+      margin: 0
+    }
+  }, "Gallery")), /*#__PURE__*/React.createElement("button", {
+    className: "btn-ghost",
     style: {
       padding: "9px 16px",
-      fontSize: 11
+      fontSize: "10px"
     },
     onClick: () => setScreen("home")
   }, "Home")), gallery.length === 0 ? /*#__PURE__*/React.createElement("div", {
     style: {
       textAlign: "center",
-      color: "#5a6676",
-      marginTop: 80
+      paddingTop: 80
     }
-  }, /*#__PURE__*/React.createElement("p", {
+  }, /*#__PURE__*/React.createElement("span", {
+    className: "label",
     style: {
-      marginBottom: 24,
-      fontSize: 14
+      display: "block",
+      marginBottom: 20
     }
-  }, "No captures yet."), /*#__PURE__*/React.createElement("button", {
-    className: "btn btn-primary",
+  }, "No portraits yet"), /*#__PURE__*/React.createElement("p", {
     style: {
-      padding: "14px 32px"
-    },
+      fontSize: 13,
+      fontWeight: 300,
+      color: "rgba(255,255,255,.3)",
+      marginBottom: 40,
+      lineHeight: 1.7
+    }
+  }, "Your iris portraits will appear here after capture."), /*#__PURE__*/React.createElement("button", {
+    className: "btn-cyan",
     onClick: () => setShowExplainer(true)
-  }, "Capture My Iris")) : /*#__PURE__*/React.createElement("div", {
+  }, "Begin Capture")) : /*#__PURE__*/React.createElement("div", {
     style: {
       display: "grid",
-      gridTemplateColumns: "repeat(auto-fill,minmax(130px,1fr))",
-      gap: 16
+      gridTemplateColumns: "repeat(auto-fill,minmax(120px,1fr))",
+      gap: 20
     }
   }, gallery.map((it, i) => /*#__PURE__*/React.createElement("div", {
     key: i,
@@ -1177,31 +1118,38 @@ function IrisLens() {
     style: {
       width: "100%",
       borderRadius: "50%",
-      border: "1px solid rgba(0,212,255,.15)"
+      display: "block",
+      border: "1px solid rgba(255,255,255,.06)"
     }
   }), /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       alignItems: "center",
       justifyContent: "center",
-      gap: 6,
-      marginTop: 8,
-      fontSize: 11,
-      textTransform: "capitalize",
-      letterSpacing: "0.06em",
-      color: "rgba(138,151,166,0.8)"
+      gap: 5,
+      marginTop: 10
     }
   }, /*#__PURE__*/React.createElement("span", {
     style: {
-      width: 7,
-      height: 7,
+      width: 5,
+      height: 5,
       borderRadius: "50%",
-      background: SWATCH[it.color] || "#777"
+      background: SWATCH[it.color] || "#777",
+      flexShrink: 0
     }
-  }), it.color), /*#__PURE__*/React.createElement("div", {
+  }), /*#__PURE__*/React.createElement("span", {
     style: {
-      fontSize: 10,
-      color: "#3a4856",
+      fontSize: 9,
+      fontWeight: 500,
+      letterSpacing: ".14em",
+      textTransform: "uppercase",
+      color: "rgba(255,255,255,.3)"
+    }
+  }, it.color)), /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 9,
+      color: "rgba(255,255,255,.15)",
+      display: "block",
       marginTop: 2
     }
   }, it.date))))), expanded && /*#__PURE__*/React.createElement("div", {
@@ -1209,7 +1157,7 @@ function IrisLens() {
     style: {
       position: "fixed",
       inset: 0,
-      background: "rgba(3,5,8,.97)",
+      background: "rgba(0,0,0,.97)",
       display: "flex",
       alignItems: "center",
       justifyContent: "center",
@@ -1223,14 +1171,14 @@ function IrisLens() {
       maxWidth: "90vw",
       maxHeight: "80vh",
       borderRadius: "50%",
-      boxShadow: `0 0 60px rgba(0,212,255,.3)`
+      boxShadow: "0 0 0 1px rgba(255,255,255,.06)"
     }
   })), showExplainer && /*#__PURE__*/React.createElement("div", {
     style: {
       position: "fixed",
       inset: 0,
-      background: "rgba(4,7,11,0.88)",
-      backdropFilter: "blur(12px)",
+      background: "rgba(0,0,0,.88)",
+      backdropFilter: "blur(16px)",
       display: "flex",
       alignItems: "center",
       justifyContent: "center",
@@ -1239,90 +1187,72 @@ function IrisLens() {
     }
   }, /*#__PURE__*/React.createElement("div", {
     style: {
-      background: "rgba(10,16,24,0.96)",
-      border: "1px solid rgba(0,212,255,.15)",
-      borderRadius: 6,
-      padding: "36px 32px",
+      background: "#0a0a0a",
+      border: "1px solid rgba(255,255,255,.08)",
+      padding: "44px 36px",
       maxWidth: 320,
       textAlign: "center",
-      width: "100%",
-      boxShadow: "0 0 0 1px rgba(0,212,255,0.05), 0 40px 80px rgba(0,0,0,0.6)"
+      width: "100%"
     }
   }, /*#__PURE__*/React.createElement("div", {
     style: {
-      margin: "0 auto 24px",
-      width: 48,
-      height: 48,
+      margin: "0 auto 28px",
+      width: 44,
+      height: 44,
       borderRadius: "50%",
-      border: `1px solid rgba(0,212,255,0.3)`,
+      border: `1px solid rgba(255,255,255,.15)`,
       display: "flex",
       alignItems: "center",
       justifyContent: "center"
     }
   }, /*#__PURE__*/React.createElement("svg", {
-    width: "22",
-    height: "16",
-    viewBox: "0 0 22 16",
+    width: "20",
+    height: "14",
+    viewBox: "0 0 20 14",
     fill: "none"
   }, /*#__PURE__*/React.createElement("path", {
-    d: "M1 8C1 8 4.5 1 11 1C17.5 1 21 8 21 8C21 8 17.5 15 11 15C4.5 15 1 8 1 8Z",
-    stroke: cyan,
-    strokeWidth: "1.5",
-    strokeLinecap: "round",
-    strokeLinejoin: "round"
+    d: "M1 7C1 7 4 1 10 1C16 1 19 7 19 7C19 7 16 13 10 13C4 13 1 7 1 7Z",
+    stroke: "rgba(255,255,255,0.5)",
+    strokeWidth: "1"
   }), /*#__PURE__*/React.createElement("circle", {
-    cx: "11",
-    cy: "8",
-    r: "3",
-    stroke: cyan,
-    strokeWidth: "1.5"
+    cx: "10",
+    cy: "7",
+    r: "2.5",
+    stroke: "rgba(255,255,255,0.5)",
+    strokeWidth: "1"
   }), /*#__PURE__*/React.createElement("circle", {
-    cx: "11",
-    cy: "8",
-    r: "1",
-    fill: cyan
-  }))), /*#__PURE__*/React.createElement("p", {
+    cx: "10",
+    cy: "7",
+    r: "0.8",
+    fill: "rgba(255,255,255,0.5)"
+  }))), /*#__PURE__*/React.createElement("span", {
+    className: "label",
     style: {
-      fontSize: 10,
-      fontWeight: 700,
-      letterSpacing: "0.2em",
-      color: cyan,
-      textTransform: "uppercase",
-      margin: "0 0 10px"
+      display: "block",
+      marginBottom: 12
     }
-  }, "Camera Required"), /*#__PURE__*/React.createElement("h3", {
+  }, "Camera Required"), /*#__PURE__*/React.createElement("p", {
     style: {
-      margin: "0 0 12px",
-      fontSize: 18,
-      fontWeight: 700,
-      letterSpacing: "-0.3px"
-    }
-  }, "Allow access to begin"), /*#__PURE__*/React.createElement("p", {
-    style: {
-      color: "rgba(138,151,166,0.85)",
       fontSize: 13,
-      lineHeight: 1.65,
-      margin: "0 0 28px"
+      fontWeight: 300,
+      lineHeight: 1.8,
+      color: "rgba(255,255,255,.45)",
+      margin: "0 0 36px"
     }
-  }, "IrisLens uses your camera to guide your iris into frame. Your image is processed on your device and never stored or uploaded."), /*#__PURE__*/React.createElement("button", {
-    className: "btn btn-primary",
+  }, "IrisLens uses your camera to guide the capture. Your image is processed on your device — nothing is uploaded."), /*#__PURE__*/React.createElement("button", {
+    className: "btn-cyan",
     style: {
-      padding: "15px",
       width: "100%",
-      marginBottom: 10,
-      fontSize: 13,
-      boxShadow: `0 0 24px rgba(0,212,255,0.2)`
+      marginBottom: 10
     },
     onClick: () => {
       setShowExplainer(false);
       setScreen("capture");
     }
   }, "Allow Camera"), /*#__PURE__*/React.createElement("button", {
-    className: "btn btn-ghost",
+    className: "btn-ghost",
     style: {
-      padding: "13px",
-      width: "100%",
-      fontSize: 13
+      width: "100%"
     },
     onClick: () => setShowExplainer(false)
   }, "Cancel"))));
