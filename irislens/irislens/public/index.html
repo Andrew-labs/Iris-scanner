@@ -335,7 +335,7 @@ function IrisLens() {
         }
 
         // Try to load cached descriptors from IndexedDB
-        const cacheKey = "irislens-face-cache-v3-" + manifest.length;
+        const cacheKey = "irislens-face-cache-v4-" + manifest.length;
         const cached = await loadFaceCache(cacheKey);
         if (cached && cached.length === manifest.length) {
           facesDbRef.current = cached;
@@ -639,12 +639,23 @@ function IrisLens() {
     }
     try {
       const detection = await fa.detectSingleFace(faceCanvas).withFaceLandmarks().withFaceDescriptor();
-      if (!detection) return {
-        name: null,
-        seat: nextFreeSeat()
-      };
 
-      // Score every entry in the DB (including admins).
+      // ── Diagnostic: did face-api actually find a face? How big? How confident? ──
+      if (!detection) {
+        console.log("[face match] NO FACE detected in scan frame at all");
+        return {
+          name: null,
+          seat: nextFreeSeat()
+        };
+      }
+      const box = detection.detection.box;
+      const score = detection.detection.score;
+      const frameW = faceCanvas.width,
+        frameH = faceCanvas.height;
+      const faceArea = box.width * box.height / (frameW * frameH);
+      console.log(`[face match] face detected: confidence=${score.toFixed(2)}, box=${Math.round(box.width)}x${Math.round(box.height)}, ${(faceArea * 100).toFixed(1)}% of frame`);
+
+      // Score every entry (admins included; seats not yet taken).
       const scored = [];
       for (const entry of db) {
         if (entry.seat !== "admin" && takenSeatsRef.current.has(entry.seat)) continue;
@@ -655,21 +666,25 @@ function IrisLens() {
         });
       }
       scored.sort((a, b) => a.dist - b.dist);
-      console.log("[face match] top candidates:", scored.slice(0, 3).map(s => `${s.entry.name}=${s.dist.toFixed(3)}`));
+      console.log("[face match] top:", scored.slice(0, 5).map(s => `${s.entry.name}=${s.dist.toFixed(3)}`));
       if (scored.length === 0) return {
         name: null,
         seat: nextFreeSeat()
       };
-      const best = scored[0];
-      const runnerUp = scored[1];
 
-      // Two conditions must hold:
-      //   (a) best distance is under the absolute threshold
-      //   (b) best is clearly better than runner-up — prevents the
-      //       "vaguely similar" false-positive that always names the first DB entry
-      const MARGIN = 0.06;
-      const clearWinner = !runnerUp || runnerUp.dist - best.dist > MARGIN;
-      if (best.dist < MATCH_THRESHOLD && clearWinner) {
+      // At scan distance, descriptors are larger than for selfie-to-selfie.
+      // The signal isn't "absolute distance under X" — it's "is the best match
+      // clearly separated from dissimilar candidates?"
+      // We accept the best match if its distance to a clearly-dissimilar reference
+      // (4th place — far enough down to escape the cluster of similar admins/etc)
+      // is significantly larger than to the best match.
+      const best = scored[0];
+      const reference = scored[Math.min(3, scored.length - 1)];
+      const ABSOLUTE_CEILING = 0.70;
+      const SEPARATION = 0.10;
+      const goodAbsolute = best.dist < ABSOLUTE_CEILING;
+      const goodSeparation = reference.dist - best.dist >= SEPARATION;
+      if (goodAbsolute && goodSeparation) {
         if (best.entry.seat !== "admin") takenSeatsRef.current.add(best.entry.seat);
         return {
           name: best.entry.name,
