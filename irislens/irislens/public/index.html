@@ -28,7 +28,7 @@ const HOLD_MS = 1200;
 const ALIGN_TOL = 0.1;
 const CROP = 512;
 const FACE_CROP = 360; // wider crop for face recognition
-const MATCH_THRESHOLD = 0.5; // cosine distance — lower = stricter
+const MATCH_THRESHOLD = 0.58; // cosine distance — lower = stricter
 
 function classifyColor(h, s, l) {
   if (l < 0.14) return "dark brown";
@@ -335,7 +335,7 @@ function IrisLens() {
         }
 
         // Try to load cached descriptors from IndexedDB
-        const cacheKey = "irislens-face-cache-v2-" + manifest.length;
+        const cacheKey = "irislens-face-cache-v3-" + manifest.length;
         const cached = await loadFaceCache(cacheKey);
         if (cached && cached.length === manifest.length) {
           facesDbRef.current = cached;
@@ -644,23 +644,36 @@ function IrisLens() {
         seat: nextFreeSeat()
       };
 
-      // Find closest descriptor in the DB
-      let best = null,
-        bestDist = Infinity;
+      // Score every entry in the DB (including admins).
+      const scored = [];
       for (const entry of db) {
-        // Admins can match unlimited times; guest seats can only be taken once.
         if (entry.seat !== "admin" && takenSeatsRef.current.has(entry.seat)) continue;
         const dist = descriptorDistance(detection.descriptor, entry.descriptor);
-        if (dist < bestDist) {
-          bestDist = dist;
-          best = entry;
-        }
+        scored.push({
+          entry,
+          dist
+        });
       }
-      if (best && bestDist < MATCH_THRESHOLD) {
-        if (best.seat !== "admin") takenSeatsRef.current.add(best.seat);
+      scored.sort((a, b) => a.dist - b.dist);
+      console.log("[face match] top candidates:", scored.slice(0, 3).map(s => `${s.entry.name}=${s.dist.toFixed(3)}`));
+      if (scored.length === 0) return {
+        name: null,
+        seat: nextFreeSeat()
+      };
+      const best = scored[0];
+      const runnerUp = scored[1];
+
+      // Two conditions must hold:
+      //   (a) best distance is under the absolute threshold
+      //   (b) best is clearly better than runner-up — prevents the
+      //       "vaguely similar" false-positive that always names the first DB entry
+      const MARGIN = 0.06;
+      const clearWinner = !runnerUp || runnerUp.dist - best.dist > MARGIN;
+      if (best.dist < MATCH_THRESHOLD && clearWinner) {
+        if (best.entry.seat !== "admin") takenSeatsRef.current.add(best.entry.seat);
         return {
-          name: best.name,
-          seat: best.seat
+          name: best.entry.name,
+          seat: best.entry.seat
         };
       }
       return {
