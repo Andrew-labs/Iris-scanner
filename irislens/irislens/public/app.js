@@ -1,0 +1,1590 @@
+const {
+  useRef,
+  useState,
+  useEffect,
+  useCallback
+} = React;
+const CDN_WASM = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.18/wasm";
+const MODEL_URL = "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task";
+const R_IRIS = [469, 470, 471, 472];
+const HOLD_MS = 1200;
+const ALIGN_TOL = 0.1;
+const CROP = 512;
+
+// ── Guest list ─────────────────────────────────────────────────────────
+// Seat "admin" = Andrew, Dirkie, Claudia — shows "ADMIN" instead of a number.
+const GUESTS = [{
+  seat: "1",
+  name: "Amber Wright"
+}, {
+  seat: "2",
+  name: "Jamie Domburg"
+}, {
+  seat: "3",
+  name: "Hannah Kruyer-Maritz"
+}, {
+  seat: "4",
+  name: "Chelsea Jonathan"
+}, {
+  seat: "5",
+  name: "Amy Lee Steenkamp"
+}, {
+  seat: "6",
+  name: "Margot Rothman"
+}, {
+  seat: "7",
+  name: "Zoë Parker"
+}, {
+  seat: "8",
+  name: "Joloving"
+}, {
+  seat: "9",
+  name: "Monica van der Walt"
+}, {
+  seat: "10",
+  name: "Anele Geqiwe"
+}, {
+  seat: "11",
+  name: "Elle Curnow"
+}, {
+  seat: "12",
+  name: "Kay-Anne De Vogeleer"
+}, {
+  seat: "13",
+  name: "Patricia Dolz"
+}, {
+  seat: "14",
+  name: "Fayazie Khan"
+}, {
+  seat: "15",
+  name: "Christine Bekker"
+}, {
+  seat: "16",
+  name: "Mari Biderman-Pam"
+}, {
+  seat: "17",
+  name: "Liebe Heyns"
+}, {
+  seat: "18",
+  name: "Sera Harper"
+}, {
+  seat: "19",
+  name: "Amy Willcock"
+}, {
+  seat: "20",
+  name: "Lee Willcock"
+}, {
+  seat: "21",
+  name: "Dr. Monica Kantani"
+}, {
+  seat: "22",
+  name: "Dourina Ritchewaldt"
+}, {
+  seat: "admin",
+  name: "Andrew"
+}, {
+  seat: "admin",
+  name: "Dirkie"
+}, {
+  seat: "admin",
+  name: "Claudia"
+}];
+
+// Normalize a name for matching: lowercase, strip accents, collapse spaces, remove punctuation
+function normalize(s) {
+  return (s || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "") // strip diacritics
+  .replace(/[.,\-']/g, " ") // punctuation → space
+  .replace(/\s+/g, " ").trim();
+}
+// Fuzzy match a typed name against the guest list.
+// Returns { entry } for a confident single match,
+//         { candidates: [entries] } for ambiguous partial match,
+//         { entry: null } for no match.
+function matchName(input) {
+  const q = normalize(input);
+  if (!q) return {
+    entry: null
+  };
+  const all = GUESTS.map(g => ({
+    ...g,
+    n: normalize(g.name)
+  }));
+
+  // 1. Exact full-name match
+  const exact = all.find(g => g.n === q);
+  if (exact) return {
+    entry: exact
+  };
+
+  // 2. Match on first word (first name) — could be ambiguous
+  const firstWord = q.split(" ")[0];
+  const firstWordMatches = all.filter(g => g.n.split(" ")[0] === firstWord);
+  if (firstWordMatches.length === 1) return {
+    entry: firstWordMatches[0]
+  };
+  if (firstWordMatches.length > 1) return {
+    candidates: firstWordMatches
+  };
+
+  // 3. Substring match on any part
+  const parts = q.split(" ");
+  const partialMatches = all.filter(g => {
+    return parts.every(p => g.n.includes(p));
+  });
+  if (partialMatches.length === 1) return {
+    entry: partialMatches[0]
+  };
+  if (partialMatches.length > 1) return {
+    candidates: partialMatches
+  };
+
+  // 4. Loose: any guest whose name contains the full query
+  const loose = all.filter(g => g.n.includes(q));
+  if (loose.length === 1) return {
+    entry: loose[0]
+  };
+  if (loose.length > 1) return {
+    candidates: loose
+  };
+  return {
+    entry: null
+  };
+}
+function classifyColor(h, s, l) {
+  if (l < 0.14) return "dark brown";
+  if (s < 0.07) return "gray";
+  if (h < 40 || h > 330) {
+    return l < 0.28 ? "dark brown" : "brown";
+  }
+  if (h >= 40 && h < 62 && s > 0.26) return "amber";
+  if (h >= 55 && h < 95 && s > 0.1) return "hazel";
+  if (h >= 95 && h < 168) return "green";
+  if (h >= 168 && h < 205) return "blue-gray";
+  if (h >= 205 && h < 265) return s < 0.11 ? "blue-gray" : "blue";
+  if (s < 0.12) return "gray";
+  return "brown";
+}
+const SWATCH = {
+  "dark brown": "#3b2417",
+  brown: "#6b4226",
+  amber: "#c08a2e",
+  hazel: "#8a7a3a",
+  green: "#3f7a54",
+  "blue-gray": "#5f7d8a",
+  blue: "#3f6fb0",
+  gray: "#7a7d82"
+};
+function rgbToHsl(r, g, b) {
+  r /= 255;
+  g /= 255;
+  b /= 255;
+  const max = Math.max(r, g, b),
+    min = Math.min(r, g, b);
+  let h = 0,
+    s = 0;
+  const l = (max + min) / 2;
+  if (max !== min) {
+    const d = max - min;
+    s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+    if (max === r) h = (g - b) / d + (g < b ? 6 : 0);else if (max === g) h = (b - r) / d + 2;else h = (r - g) / d + 4;
+    h *= 60;
+  }
+  return [h, s, l];
+}
+function HudOverlay({
+  state
+}) {
+  const c = "#00d4ff",
+    dim = "rgba(0,212,255,0.25)",
+    lock = state === "locking" || state === "capturing";
+  const ticks = [];
+  for (let i = 0; i < 72; i++) {
+    const a = i * 5 * Math.PI / 180,
+      maj = i % 9 === 0;
+    ticks.push(/*#__PURE__*/React.createElement("line", {
+      key: i,
+      x1: 200 + (maj ? 151 : 155) * Math.cos(a),
+      y1: 200 + (maj ? 151 : 155) * Math.sin(a),
+      x2: 200 + 162 * Math.cos(a),
+      y2: 200 + 162 * Math.sin(a),
+      stroke: maj ? c : dim,
+      strokeWidth: maj ? 1.2 : 0.6,
+      opacity: "0.8"
+    }));
+  }
+  return /*#__PURE__*/React.createElement("svg", {
+    viewBox: "0 0 400 400",
+    style: {
+      position: "absolute",
+      top: "50%",
+      left: "50%",
+      width: "min(86vw,360px)",
+      height: "min(86vw,360px)",
+      transform: "translate(-50%,-55%)",
+      pointerEvents: "none",
+      overflow: "visible"
+    }
+  }, ticks, /*#__PURE__*/React.createElement("circle", {
+    cx: "200",
+    cy: "200",
+    r: "162",
+    fill: "none",
+    stroke: dim,
+    strokeWidth: "0.8",
+    strokeDasharray: "3 4"
+  }), /*#__PURE__*/React.createElement("circle", {
+    cx: "200",
+    cy: "200",
+    r: "140",
+    fill: "none",
+    stroke: lock ? c : dim,
+    strokeWidth: "0.8",
+    opacity: "0.6"
+  }), /*#__PURE__*/React.createElement("circle", {
+    cx: "200",
+    cy: "200",
+    r: "118",
+    fill: "none",
+    stroke: lock ? c : dim,
+    strokeWidth: "2",
+    strokeDasharray: state === "locking" ? "28 8" : state === "capturing" ? "none" : "56 18",
+    style: {
+      transition: "all 0.5s"
+    }
+  }), /*#__PURE__*/React.createElement("circle", {
+    cx: "200",
+    cy: "200",
+    r: "94",
+    fill: "none",
+    stroke: dim,
+    strokeWidth: "0.8",
+    strokeDasharray: "2 5"
+  }), /*#__PURE__*/React.createElement("path", {
+    d: "M60 108 L60 60 L108 60",
+    fill: "none",
+    stroke: c,
+    strokeWidth: "1.5",
+    opacity: "0.9"
+  }), /*#__PURE__*/React.createElement("path", {
+    d: "M292 60 L340 60 L340 108",
+    fill: "none",
+    stroke: c,
+    strokeWidth: "1.5",
+    opacity: "0.9"
+  }), /*#__PURE__*/React.createElement("path", {
+    d: "M60 292 L60 340 L108 340",
+    fill: "none",
+    stroke: c,
+    strokeWidth: "1.5",
+    opacity: "0.9"
+  }), /*#__PURE__*/React.createElement("path", {
+    d: "M292 340 L340 340 L340 292",
+    fill: "none",
+    stroke: c,
+    strokeWidth: "1.5",
+    opacity: "0.9"
+  }), /*#__PURE__*/React.createElement("line", {
+    x1: "200",
+    y1: "70",
+    x2: "200",
+    y2: "84",
+    stroke: "rgba(0,212,255,0.5)",
+    strokeWidth: "1.2"
+  }), /*#__PURE__*/React.createElement("line", {
+    x1: "200",
+    y1: "316",
+    x2: "200",
+    y2: "330",
+    stroke: "rgba(0,212,255,0.5)",
+    strokeWidth: "1.2"
+  }), /*#__PURE__*/React.createElement("line", {
+    x1: "70",
+    y1: "200",
+    x2: "84",
+    y2: "200",
+    stroke: "rgba(0,212,255,0.5)",
+    strokeWidth: "1.2"
+  }), /*#__PURE__*/React.createElement("line", {
+    x1: "316",
+    y1: "200",
+    x2: "330",
+    y2: "200",
+    stroke: "rgba(0,212,255,0.5)",
+    strokeWidth: "1.2"
+  }), /*#__PURE__*/React.createElement("text", {
+    x: "112",
+    y: "54",
+    fill: c,
+    fontSize: "8",
+    fontFamily: "Inter,monospace",
+    opacity: "0.6",
+    letterSpacing: "2"
+  }, "IRIS.SCAN"), /*#__PURE__*/React.createElement("text", {
+    x: "288",
+    y: "54",
+    fill: c,
+    fontSize: "8",
+    fontFamily: "Inter,monospace",
+    opacity: "0.6",
+    textAnchor: "end",
+    letterSpacing: "2"
+  }, state === "capturing" ? "CAPTURED" : state === "locking" ? "LOCKING" : "SCANNING"), [0, 90, 180, 270].map(deg => {
+    const a = deg * Math.PI / 180;
+    return /*#__PURE__*/React.createElement("circle", {
+      key: deg,
+      cx: 200 + 118 * Math.cos(a),
+      cy: 200 + 118 * Math.sin(a),
+      r: "3.5",
+      fill: lock ? c : "none",
+      stroke: c,
+      strokeWidth: "1.2",
+      opacity: "0.9"
+    });
+  }));
+}
+function IrisLens() {
+  const [screen, setScreen] = useState("home");
+  const [status, setStatus] = useState("Position your eye within the ring");
+  const [hudState, setHudState] = useState("searching");
+  const [permError, setPermError] = useState(null);
+  const [showNamePrompt, setShowNamePrompt] = useState(false);
+  const [showExplainer, setShowExplainer] = useState(false);
+  const [nameInput, setNameInput] = useState("");
+  const [disambigList, setDisambigList] = useState(null); // [entries] when ambiguous
+  const [currentGuest, setCurrentGuest] = useState(null); // resolved guest entry
+  const [result, setResult] = useState(null);
+  const [gallery, setGallery] = useState([]);
+  const [expanded, setExpanded] = useState(null);
+  const [procMsg, setProcMsg] = useState("Reading iris geometry…");
+  const [genError, setGenError] = useState(null);
+  const videoRef = useRef(null),
+    streamRef = useRef(null),
+    landmarkerRef = useRef(null);
+  const rafRef = useRef(null),
+    holdStartRef = useRef(null),
+    capturedRef = useRef(false);
+  const lastCropRef = useRef(null),
+    lastColorRef = useRef("natural");
+  const loadLandmarker = useCallback(async () => {
+    if (landmarkerRef.current) return landmarkerRef.current;
+    let v = window.visionTasks;
+    if (!v) {
+      await new Promise((res, rej) => {
+        const t = setTimeout(() => rej(new Error("MediaPipe timeout")), 20000);
+        window.addEventListener("mp-ready", () => {
+          clearTimeout(t);
+          res();
+        }, {
+          once: true
+        });
+      });
+      v = window.visionTasks;
+    }
+    const {
+      FaceLandmarker,
+      FilesetResolver
+    } = v;
+    const fs = await FilesetResolver.forVisionTasks(CDN_WASM);
+    const lm = await FaceLandmarker.createFromOptions(fs, {
+      baseOptions: {
+        modelAssetPath: MODEL_URL,
+        delegate: "GPU"
+      },
+      runningMode: "VIDEO",
+      numFaces: 1,
+      outputFaceBlendshapes: false
+    });
+    landmarkerRef.current = lm;
+    return lm;
+  }, []);
+  const startCamera = useCallback(async () => {
+    setPermError(null);
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: {
+          facingMode: "user",
+          width: {
+            ideal: 1280
+          },
+          height: {
+            ideal: 720
+          }
+        },
+        audio: false
+      });
+      streamRef.current = stream;
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        await videoRef.current.play();
+      }
+      await loadLandmarker();
+      capturedRef.current = false;
+      holdStartRef.current = null;
+      setHudState("searching");
+      loop();
+    } catch (e) {
+      if (e.name === "NotAllowedError") setPermError("Camera access was denied. Please enable it in your browser settings.");else if (e.name === "NotFoundError") setPermError("No camera detected on this device.");else setPermError("Camera unavailable: " + e.message);
+    }
+  }, [loadLandmarker]);
+  const stopCamera = useCallback(() => {
+    if (rafRef.current) cancelAnimationFrame(rafRef.current);
+    if (streamRef.current) streamRef.current.getTracks().forEach(t => t.stop());
+    streamRef.current = null;
+  }, []);
+  const loop = useCallback(() => {
+    const video = videoRef.current,
+      lm = landmarkerRef.current;
+    if (!video || !lm || video.readyState < 2 || capturedRef.current) {
+      rafRef.current = requestAnimationFrame(loop);
+      return;
+    }
+    let res;
+    try {
+      res = lm.detectForVideo(video, performance.now());
+    } catch {
+      rafRef.current = requestAnimationFrame(loop);
+      return;
+    }
+    if (!res.faceLandmarks?.length) {
+      setStatus("Position your eye within the ring");
+      setHudState("searching");
+      holdStartRef.current = null;
+    } else {
+      const pts = res.faceLandmarks[0],
+        iris = R_IRIS.map(i => pts[i]);
+      const cx = iris.reduce((a, p) => a + p.x, 0) / 4,
+        cy = iris.reduce((a, p) => a + p.y, 0) / 4;
+      const rad = Math.max(...iris.map(p => Math.hypot(p.x - cx, p.y - cy)));
+      const dist = Math.hypot(cx - 0.5, cy - 0.5);
+      if (dist > ALIGN_TOL * 1.6) {
+        setStatus("Centre your eye");
+        setHudState("searching");
+        holdStartRef.current = null;
+      } else if (rad < 0.018) {
+        setStatus("Move closer");
+        setHudState("searching");
+        holdStartRef.current = null;
+      } else if (rad > 0.09) {
+        setStatus("Move back slightly");
+        setHudState("searching");
+        holdStartRef.current = null;
+      } else if (dist > ALIGN_TOL) {
+        setStatus("Align to centre");
+        setHudState("aligning");
+        holdStartRef.current = null;
+      } else {
+        if (!holdStartRef.current) holdStartRef.current = performance.now();
+        if (performance.now() - holdStartRef.current >= HOLD_MS) {
+          capturedRef.current = true;
+          setHudState("capturing");
+          setStatus("Captured");
+          setTimeout(() => capture(cx, cy, rad), 200);
+          return;
+        }
+        setHudState("locking");
+        setStatus("Hold steady");
+      }
+    }
+    rafRef.current = requestAnimationFrame(loop);
+  }, []);
+  const capture = useCallback((ncx, ncy, nrad) => {
+    const video = videoRef.current,
+      vw = video.videoWidth,
+      vh = video.videoHeight;
+    const pad = 3.2,
+      radPx = nrad * vw * pad,
+      cxPx = ncx * vw,
+      cyPx = ncy * vh;
+    const c = document.createElement("canvas");
+    c.width = CROP;
+    c.height = CROP;
+    const ctx = c.getContext("2d");
+    ctx.drawImage(video, cxPx - radPx, cyPx - radPx, radPx * 2, radPx * 2, 0, 0, CROP, CROP);
+    const d = ctx.getImageData(0, 0, CROP, CROP).data;
+    const cxp = CROP / 2,
+      cyp = CROP / 2,
+      irisR = CROP / (2 * 3.2);
+    let sr = 0,
+      sg = 0,
+      sb = 0,
+      sn = 0;
+    for (let y = 0; y < CROP; y += 4) for (let x = 0; x < CROP; x += 4) {
+      const dx = x - cxp,
+        dy = y - cyp,
+        dist = Math.sqrt(dx * dx + dy * dy);
+      if (dist > irisR * 1.15 && dist < irisR * 2.1) {
+        const i = (y * CROP + x) * 4,
+          r = d[i],
+          g = d[i + 1],
+          b = d[i + 2];
+        if ((r + g + b) / 3 > 155) {
+          sr += r;
+          sg += g;
+          sb += b;
+          sn++;
+        }
+      }
+    }
+    let wr = 1,
+      wg = 1,
+      wb = 1;
+    if (sn > 40) {
+      const ar = sr / sn,
+        ag = sg / sn,
+        ab = sb / sn,
+        mx = Math.max(ar, ag, ab);
+      wr = Math.min(mx / ar, 1.55);
+      wg = Math.min(mx / ag, 1.55);
+      wb = Math.min(mx / ab, 1.55);
+    }
+    const ringIn = irisR * 0.32,
+      ringOut = irisR * 0.84;
+    const bins = new Float32Array(72);
+    let wsSum = 0,
+      wlSum = 0,
+      wCount = 0;
+    for (let y = 0; y < CROP; y += 2) for (let x = 0; x < CROP; x += 2) {
+      const dx = x - cxp,
+        dy = y - cyp,
+        dist = Math.sqrt(dx * dx + dy * dy);
+      if (dist >= ringIn && dist <= ringOut) {
+        const i = (y * CROP + x) * 4;
+        const r = Math.min(255, d[i] * wr),
+          g = Math.min(255, d[i + 1] * wg),
+          b = Math.min(255, d[i + 2] * wb);
+        const [h, s, l] = rgbToHsl(r, g, b);
+        if (s > 0.07) bins[Math.floor(h / 5) % 72] += s * s;
+        wsSum += s;
+        wlSum += l;
+        wCount++;
+      }
+    }
+    const sm = new Float32Array(72);
+    for (let i = 0; i < 72; i++) sm[i] = (bins[(i - 2 + 72) % 72] + bins[(i - 1 + 72) % 72] * 2 + bins[i] * 3 + bins[(i + 1) % 72] * 2 + bins[(i + 2) % 72]) / 9;
+    let pk = 0,
+      pv = 0;
+    for (let i = 0; i < 72; i++) if (sm[i] > pv) {
+      pv = sm[i];
+      pk = i;
+    }
+    const colorLabel = classifyColor(pk * 5 + 2.5, wCount > 0 ? wsSum / wCount : 0, wCount > 0 ? wlSum / wCount : 0);
+    const dataUrl = c.toDataURL("image/jpeg", 0.9);
+    lastCropRef.current = dataUrl;
+    lastColorRef.current = colorLabel;
+    stopCamera();
+    setGenError(null);
+    setScreen("processing");
+    generate(dataUrl, colorLabel);
+  }, [stopCamera]);
+  const generate = useCallback(async (dataUrl, colorLabel) => {
+    const msgs = ["Reading iris geometry…", "Mapping fibre patterns…", "Cross-referencing", "Rendering macro detail…", "Finalising your portrait…"];
+    let mi = 0;
+    setProcMsg(msgs[0]);
+    const t = setInterval(() => {
+      mi = (mi + 1) % msgs.length;
+      setProcMsg(msgs[mi]);
+    }, 3000);
+    try {
+      const startRes = await fetch("/api/generate", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          imageDataUrl: dataUrl,
+          colorLabel
+        })
+      });
+      const start = await startRes.json();
+      if (!startRes.ok || !start.id) throw new Error(start.error || "Could not start generation");
+      const finalColor = start.confirmedColor || colorLabel;
+      let output = null;
+      for (let i = 0; i < 60; i++) {
+        await new Promise(r => setTimeout(r, 1500));
+        const pRes = await fetch("/api/poll?id=" + encodeURIComponent(start.id));
+        const p = await pRes.json();
+        if (p.status === "succeeded" && p.output) {
+          output = p.output;
+          break;
+        }
+        if (p.status === "failed" || p.status === "canceled") throw new Error(p.error || "Generation failed");
+      }
+      clearInterval(t);
+      if (!output) throw new Error("Generation timed out. Please try again.");
+      const item = {
+        url: output,
+        color: finalColor,
+        seat: currentGuest?.seat || "—",
+        name: currentGuest?.name || null,
+        date: new Date().toLocaleDateString()
+      };
+      setResult(item);
+      setGallery(g => [item, ...g]);
+      setScreen("results");
+    } catch (e) {
+      clearInterval(t);
+      setGenError(String(e.message || e));
+    }
+  }, [currentGuest]);
+  useEffect(() => {
+    if (screen === "capture") startCamera();
+    return () => {
+      if (screen === "capture") stopCamera();
+    };
+  }, [screen]);
+
+  // Handle the name form submit
+  const handleNameSubmit = () => {
+    const res = matchName(nameInput);
+    if (res.entry) {
+      setCurrentGuest(res.entry);
+      setShowNamePrompt(false);
+      setDisambigList(null);
+      setNameInput("");
+      setShowExplainer(true); // then the camera-permission modal
+    } else if (res.candidates) {
+      setDisambigList(res.candidates);
+    } else {
+      // No match — still let them through with next free seat
+      setCurrentGuest({
+        name: nameInput,
+        seat: "—"
+      });
+      setShowNamePrompt(false);
+      setNameInput("");
+      setShowExplainer(true);
+    }
+  };
+  const chooseDisambig = entry => {
+    setCurrentGuest(entry);
+    setShowNamePrompt(false);
+    setDisambigList(null);
+    setNameInput("");
+    setShowExplainer(true);
+  };
+  const C = "#00d4ff";
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      minHeight: "100vh",
+      background: "#000",
+      color: "#fff",
+      fontFamily: "'Inter', system-ui, sans-serif",
+      overflowX: "hidden"
+    }
+  }, /*#__PURE__*/React.createElement("style", null, `
+        @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;1,300;1,400&family=Inter:wght@300;400;500;600&display=swap');
+        *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+        @keyframes spin{to{transform:rotate(360deg);}}
+        @keyframes pulse{0%,100%{opacity:.4}50%{opacity:1}}
+        @keyframes fadeUp{from{opacity:0;transform:translateY(32px);}to{opacity:1;transform:translateY(0);}}
+        @keyframes fadeIn{from{opacity:0;}to{opacity:1;}}
+        @keyframes irisReveal{0%{opacity:0;filter:blur(24px) brightness(.3);transform:scale(1.04);}100%{opacity:1;filter:blur(0) brightness(1);transform:scale(1);}}
+        @keyframes seatReveal{from{opacity:0;transform:translateY(12px);}to{opacity:1;transform:translateY(0);}}
+        @keyframes lineGrow{from{transform:scaleX(0);transform-origin:left;}to{transform:scaleX(1);transform-origin:left;}}
+        @keyframes scanline{0%{transform:translateY(-100%);opacity:0;}20%{opacity:.8;}80%{opacity:.8;}100%{transform:translateY(100%);opacity:0;}}
+        .display{font-family:'Cormorant Garamond',serif;font-weight:300;letter-spacing:-.02em;line-height:.96;}
+        .label{font-size:10px;font-weight:500;letter-spacing:.28em;text-transform:uppercase;color:rgba(255,255,255,.4);}
+        .btn-ghost{background:transparent;border:1px solid rgba(255,255,255,.18);color:rgba(255,255,255,.7);padding:14px 28px;font-family:'Inter',sans-serif;font-size:11px;font-weight:500;letter-spacing:.16em;text-transform:uppercase;cursor:pointer;transition:all .3s;min-height:48px;}
+        .btn-ghost:hover{border-color:rgba(255,255,255,.5);color:#fff;}
+        .btn-primary{background:#fff;border:none;color:#000;padding:16px 40px;font-family:'Inter',sans-serif;font-size:11px;font-weight:600;letter-spacing:.18em;text-transform:uppercase;cursor:pointer;transition:all .3s;min-height:48px;}
+        .btn-primary:hover{background:rgba(255,255,255,.88);}
+        .btn-cyan{background:transparent;border:1px solid ${C};color:${C};padding:16px 40px;font-family:'Inter',sans-serif;font-size:11px;font-weight:500;letter-spacing:.18em;text-transform:uppercase;cursor:pointer;transition:all .3s;min-height:48px;}
+        .btn-cyan:hover{background:rgba(0,212,255,.06);}
+        .name-input{width:100%;background:transparent;border:none;border-bottom:1px solid rgba(255,255,255,.2);color:#fff;font-family:'Cormorant Garamond',serif;font-size:24px;font-weight:300;padding:12px 0;outline:none;text-align:center;letter-spacing:.02em;transition:border-color .3s;}
+        .name-input:focus{border-bottom-color:${C};}
+        .name-input::placeholder{color:rgba(255,255,255,.25);font-style:italic;}
+        .disambig-btn{width:100%;background:transparent;border:1px solid rgba(255,255,255,.12);color:#fff;padding:14px 20px;font-family:'Inter',sans-serif;font-size:13px;font-weight:400;letter-spacing:.05em;cursor:pointer;transition:all .25s;text-align:left;margin-bottom:8px;}
+        .disambig-btn:hover{border-color:${C};background:rgba(0,212,255,.05);}
+        @media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+      `), screen === "home" && /*#__PURE__*/React.createElement("div", {
+    style: {
+      height: "100vh",
+      display: "flex",
+      flexDirection: "column",
+      position: "relative",
+      overflow: "hidden",
+      background: "#000"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      position: "absolute",
+      inset: 0
+    }
+  }, /*#__PURE__*/React.createElement("img", {
+    src: "/hero.jpg",
+    alt: "",
+    style: {
+      width: "100%",
+      height: "100%",
+      objectFit: "cover",
+      objectPosition: "50% 62%",
+      display: "block",
+      filter: "brightness(0.3) contrast(1.1)",
+      transform: "scale(1.02)"
+    }
+  }), /*#__PURE__*/React.createElement("div", {
+    style: {
+      position: "absolute",
+      inset: 0,
+      background: "radial-gradient(ellipse 70% 60% at 55% 42%, rgba(0,0,0,0.1) 0%, rgba(0,0,0,0.7) 60%, rgba(0,0,0,0.95) 100%)"
+    }
+  }), /*#__PURE__*/React.createElement("div", {
+    style: {
+      position: "absolute",
+      inset: 0,
+      background: "linear-gradient(to right, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0.4) 50%, rgba(0,0,0,0.6) 100%)"
+    }
+  }), /*#__PURE__*/React.createElement("div", {
+    style: {
+      position: "absolute",
+      bottom: 0,
+      left: 0,
+      right: 0,
+      height: "50%",
+      background: "linear-gradient(to bottom, transparent 0%, #000 100%)"
+    }
+  })), /*#__PURE__*/React.createElement("div", {
+    style: {
+      position: "relative",
+      zIndex: 2,
+      padding: "28px 36px",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "space-between"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 8
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      width: 20,
+      height: 20,
+      borderRadius: "50%",
+      border: `1px solid ${C}`,
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      width: 6,
+      height: 6,
+      borderRadius: "50%",
+      background: C
+    }
+  })), /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 13,
+      fontWeight: 500,
+      letterSpacing: ".12em",
+      textTransform: "uppercase"
+    }
+  }, "IrisLens")), /*#__PURE__*/React.createElement("button", {
+    className: "btn-ghost",
+    style: {
+      padding: "8px 16px",
+      fontSize: "10px"
+    },
+    onClick: () => setScreen("gallery")
+  }, "Gallery")), /*#__PURE__*/React.createElement("div", {
+    style: {
+      position: "relative",
+      zIndex: 2,
+      marginTop: "auto",
+      padding: "0 36px 56px",
+      animation: "fadeUp 1s cubic-bezier(0.16,1,0.3,1) forwards"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 12,
+      marginBottom: 20
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      width: 24,
+      height: 1,
+      background: C,
+      opacity: .7
+    }
+  }), /*#__PURE__*/React.createElement("span", {
+    className: "label",
+    style: {
+      color: C,
+      opacity: .9
+    }
+  }, "Iris Identification")), /*#__PURE__*/React.createElement("h1", {
+    className: "display",
+    style: {
+      fontSize: "clamp(52px,11vw,80px)",
+      margin: "0 0 4px",
+      color: "#fff"
+    }
+  }, "Find your"), /*#__PURE__*/React.createElement("h1", {
+    className: "display",
+    style: {
+      fontSize: "clamp(52px,11vw,80px)",
+      margin: "0 0 36px",
+      color: "rgba(255,255,255,.55)",
+      fontStyle: "italic"
+    }
+  }, "seat."), /*#__PURE__*/React.createElement("div", {
+    style: {
+      height: 1,
+      width: 48,
+      background: "rgba(255,255,255,.2)",
+      marginBottom: 28,
+      animation: "lineGrow 1.2s 0.3s ease-out both"
+    }
+  }), /*#__PURE__*/React.createElement("p", {
+    style: {
+      fontSize: 13,
+      fontWeight: 300,
+      lineHeight: 1.8,
+      color: "rgba(255,255,255,.45)",
+      maxWidth: 300,
+      margin: "0 0 44px",
+      letterSpacing: ".01em"
+    }
+  }, "Your unique iris signature is matched to your reserved place."), /*#__PURE__*/React.createElement("button", {
+    className: "btn-cyan",
+    style: {
+      width: "100%",
+      maxWidth: 340
+    },
+    onClick: () => {
+      setShowNamePrompt(true);
+      setNameInput("");
+      setDisambigList(null);
+    }
+  }, "Begin Scan"))), screen === "capture" && /*#__PURE__*/React.createElement("div", {
+    style: {
+      position: "fixed",
+      inset: 0,
+      background: "#000"
+    }
+  }, /*#__PURE__*/React.createElement("video", {
+    ref: videoRef,
+    autoPlay: true,
+    playsInline: true,
+    muted: true,
+    style: {
+      width: "100%",
+      height: "100%",
+      objectFit: "cover",
+      transform: "scaleX(-1)"
+    }
+  }), /*#__PURE__*/React.createElement("div", {
+    style: {
+      position: "absolute",
+      inset: 0,
+      background: "radial-gradient(ellipse 58% 52% at 50% 42%, transparent 38%, rgba(0,0,0,.82) 100%)",
+      pointerEvents: "none"
+    }
+  }), !permError && /*#__PURE__*/React.createElement(HudOverlay, {
+    state: hudState
+  }), !permError && (hudState === "locking" || hudState === "aligning") && /*#__PURE__*/React.createElement("div", {
+    style: {
+      position: "absolute",
+      top: "50%",
+      left: "50%",
+      width: "min(65vw,268px)",
+      height: "1px",
+      transform: "translate(-50%,-55%)",
+      background: `linear-gradient(to right, transparent, ${C}, transparent)`,
+      animation: "scanline 1.8s ease-in-out infinite",
+      pointerEvents: "none",
+      opacity: .6
+    }
+  }), !permError && /*#__PURE__*/React.createElement("div", {
+    style: {
+      position: "absolute",
+      bottom: "max(108px,13vh)",
+      left: 0,
+      right: 0,
+      textAlign: "center"
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    className: "label",
+    style: {
+      color: C,
+      textShadow: "0 0 20px rgba(0,212,255,.6)",
+      letterSpacing: ".22em"
+    }
+  }, status)), permError && /*#__PURE__*/React.createElement("div", {
+    style: {
+      position: "absolute",
+      inset: 0,
+      display: "flex",
+      flexDirection: "column",
+      alignItems: "center",
+      justifyContent: "center",
+      padding: 40,
+      textAlign: "center",
+      background: "rgba(0,0,0,.92)"
+    }
+  }, /*#__PURE__*/React.createElement("p", {
+    className: "label",
+    style: {
+      color: "rgba(255,255,255,.4)",
+      marginBottom: 12
+    }
+  }, "Camera Error"), /*#__PURE__*/React.createElement("p", {
+    style: {
+      fontSize: 14,
+      fontWeight: 300,
+      lineHeight: 1.7,
+      marginBottom: 36,
+      maxWidth: 280,
+      color: "rgba(255,255,255,.7)"
+    }
+  }, permError), /*#__PURE__*/React.createElement("button", {
+    className: "btn-primary",
+    onClick: startCamera
+  }, "Try Again"), /*#__PURE__*/React.createElement("button", {
+    className: "btn-ghost",
+    style: {
+      marginTop: 12
+    },
+    onClick: () => setScreen("home")
+  }, "Cancel")), /*#__PURE__*/React.createElement("div", {
+    style: {
+      position: "absolute",
+      bottom: "max(40px,env(safe-area-inset-bottom))",
+      left: 0,
+      right: 0,
+      display: "flex",
+      justifyContent: "center"
+    }
+  }, /*#__PURE__*/React.createElement("button", {
+    onClick: () => setScreen("home"),
+    style: {
+      background: "transparent",
+      border: "1px solid rgba(255,255,255,.15)",
+      color: "rgba(255,255,255,.4)",
+      width: 44,
+      height: 44,
+      cursor: "pointer",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      fontSize: 16,
+      borderRadius: "50%"
+    }
+  }, "✕"))), screen === "processing" && /*#__PURE__*/React.createElement("div", {
+    style: {
+      minHeight: "100vh",
+      display: "flex",
+      flexDirection: "column",
+      alignItems: "center",
+      justifyContent: "center",
+      padding: "0 36px",
+      textAlign: "center",
+      background: "#000"
+    }
+  }, !genError ? /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
+    style: {
+      position: "relative",
+      width: 80,
+      height: 80,
+      marginBottom: 56
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      position: "absolute",
+      inset: 0,
+      borderRadius: "50%",
+      border: "1px solid rgba(255,255,255,.06)"
+    }
+  }), /*#__PURE__*/React.createElement("div", {
+    style: {
+      position: "absolute",
+      inset: 0,
+      borderRadius: "50%",
+      border: "1px solid transparent",
+      borderTopColor: "rgba(255,255,255,.5)",
+      animation: "spin 2s linear infinite"
+    }
+  }), /*#__PURE__*/React.createElement("div", {
+    style: {
+      position: "absolute",
+      inset: 12,
+      borderRadius: "50%",
+      border: "1px solid transparent",
+      borderTopColor: C,
+      animation: "spin 1.4s linear infinite reverse",
+      opacity: .7
+    }
+  })), /*#__PURE__*/React.createElement("p", {
+    className: "display",
+    style: {
+      fontSize: "clamp(28px,6vw,42px)",
+      margin: "0 0 16px",
+      color: "rgba(255,255,255,.9)"
+    }
+  }, procMsg), /*#__PURE__*/React.createElement("span", {
+    className: "label",
+    style: {
+      color: "rgba(255,255,255,.2)"
+    }
+  }, "Identifying your seat")) : /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("span", {
+    className: "label",
+    style: {
+      color: "rgba(255,255,255,.3)",
+      marginBottom: 16
+    }
+  }, "Generation Failed"), /*#__PURE__*/React.createElement("p", {
+    style: {
+      fontSize: 13,
+      fontWeight: 300,
+      color: "rgba(255,255,255,.5)",
+      maxWidth: 280,
+      marginBottom: 40,
+      lineHeight: 1.7
+    }
+  }, genError), /*#__PURE__*/React.createElement("button", {
+    className: "btn-primary",
+    onClick: () => {
+      setGenError(null);
+      lastCropRef.current ? generate(lastCropRef.current, lastColorRef.current) : setScreen("capture");
+    }
+  }, "Try Again"), /*#__PURE__*/React.createElement("button", {
+    className: "btn-ghost",
+    style: {
+      marginTop: 12
+    },
+    onClick: () => setScreen("home")
+  }, "Home"))), screen === "results" && result && /*#__PURE__*/React.createElement("div", {
+    style: {
+      minHeight: "100vh",
+      display: "flex",
+      flexDirection: "column",
+      alignItems: "center",
+      justifyContent: "space-between",
+      background: "#000",
+      padding: "0 24px"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      width: "100%",
+      maxWidth: 480,
+      display: "flex",
+      justifyContent: "space-between",
+      padding: "28px 0"
+    }
+  }, /*#__PURE__*/React.createElement("button", {
+    className: "btn-ghost",
+    style: {
+      padding: "9px 16px",
+      fontSize: "10px"
+    },
+    onClick: () => setScreen("home")
+  }, "← Home"), /*#__PURE__*/React.createElement("button", {
+    className: "btn-ghost",
+    style: {
+      padding: "9px 16px",
+      fontSize: "10px"
+    },
+    onClick: () => setScreen("gallery")
+  }, "Gallery")), /*#__PURE__*/React.createElement("div", {
+    style: {
+      flex: 1,
+      display: "flex",
+      flexDirection: "column",
+      alignItems: "center",
+      justifyContent: "center",
+      width: "100%",
+      padding: "16px 0",
+      gap: 40
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      position: "relative"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      position: "absolute",
+      inset: -28,
+      borderRadius: "50%",
+      border: "1px solid rgba(255,255,255,.04)",
+      pointerEvents: "none"
+    }
+  }), /*#__PURE__*/React.createElement("div", {
+    style: {
+      position: "absolute",
+      inset: -52,
+      borderRadius: "50%",
+      border: "1px solid rgba(255,255,255,.025)",
+      pointerEvents: "none"
+    }
+  }), /*#__PURE__*/React.createElement("div", {
+    style: {
+      position: "absolute",
+      inset: -80,
+      borderRadius: "50%",
+      border: "1px solid rgba(0,212,255,.04)",
+      pointerEvents: "none"
+    }
+  }), /*#__PURE__*/React.createElement("img", {
+    src: result.url,
+    alt: "Your iris portrait",
+    style: {
+      width: "min(64vw,320px)",
+      height: "min(64vw,320px)",
+      borderRadius: "50%",
+      objectFit: "cover",
+      display: "block",
+      animation: "irisReveal 1.8s cubic-bezier(0.25,0.46,0.45,0.94) forwards",
+      boxShadow: "0 0 0 1px rgba(255,255,255,.06), 0 0 60px rgba(0,0,0,.8)"
+    }
+  })), /*#__PURE__*/React.createElement("div", {
+    style: {
+      textAlign: "center",
+      animation: "seatReveal 1s 1.6s cubic-bezier(0.16,1,0.3,1) both"
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    className: "label",
+    style: {
+      display: "block",
+      marginBottom: 14,
+      color: C,
+      opacity: .85
+    }
+  }, result.seat === "admin" ? "Access" : "Your Seat"), /*#__PURE__*/React.createElement("div", {
+    className: "display",
+    style: {
+      fontSize: result.seat === "admin" ? "clamp(56px,12vw,88px)" : "clamp(72px,16vw,112px)",
+      lineHeight: 1,
+      color: "#fff",
+      margin: 0,
+      letterSpacing: result.seat === "admin" ? "0.04em" : "-0.02em"
+    }
+  }, result.seat === "admin" ? "ADMIN" : result.seat), result.name && result.seat !== "admin" && /*#__PURE__*/React.createElement("p", {
+    style: {
+      fontSize: 12,
+      fontWeight: 400,
+      letterSpacing: ".08em",
+      color: "rgba(255,255,255,.4)",
+      marginTop: 16,
+      textTransform: "uppercase"
+    }
+  }, result.name))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      width: "100%",
+      maxWidth: 420,
+      paddingBottom: "max(40px,env(safe-area-inset-bottom))",
+      textAlign: "center"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 10,
+      marginBottom: 24
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      width: 6,
+      height: 6,
+      borderRadius: "50%",
+      background: SWATCH[result.color] || "#777",
+      boxShadow: `0 0 8px ${SWATCH[result.color] || "#777"}`
+    }
+  }), /*#__PURE__*/React.createElement("span", {
+    className: "label"
+  }, result.color)), /*#__PURE__*/React.createElement("div", {
+    style: {
+      height: 1,
+      background: "rgba(255,255,255,.06)",
+      marginBottom: 24
+    }
+  }), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 8,
+      justifyContent: "center"
+    }
+  }, /*#__PURE__*/React.createElement("button", {
+    className: "btn-primary",
+    style: {
+      padding: "14px 32px",
+      fontSize: "11px"
+    },
+    onClick: async () => {
+      try {
+        const blob = await (await fetch(result.url)).blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `iris-${Date.now()}.png`;
+        a.click();
+        URL.revokeObjectURL(url);
+      } catch {
+        window.open(result.url, "_blank");
+      }
+    }
+  }, "Save"), /*#__PURE__*/React.createElement("button", {
+    className: "btn-ghost",
+    onClick: async () => {
+      try {
+        const blob = await (await fetch(result.url)).blob();
+        const file = new File([blob], "iris.png", {
+          type: "image/png"
+        });
+        if (navigator.canShare && navigator.canShare({
+          files: [file]
+        })) await navigator.share({
+          files: [file],
+          title: "My iris — IrisLens"
+        });else await navigator.clipboard.writeText(result.url);
+      } catch {}
+    }
+  }, "Share"), /*#__PURE__*/React.createElement("button", {
+    className: "btn-ghost",
+    onClick: () => {
+      setCurrentGuest(null);
+      setScreen("home");
+    }
+  }, "Retake")))), screen === "gallery" && /*#__PURE__*/React.createElement("div", {
+    style: {
+      minHeight: "100vh",
+      background: "#000",
+      padding: "36px 28px"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "baseline",
+      justifyContent: "space-between",
+      marginBottom: 48
+    }
+  }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("span", {
+    className: "label",
+    style: {
+      display: "block",
+      marginBottom: 8
+    }
+  }, "Collection"), /*#__PURE__*/React.createElement("h2", {
+    className: "display",
+    style: {
+      fontSize: 40,
+      margin: 0
+    }
+  }, "Gallery")), /*#__PURE__*/React.createElement("button", {
+    className: "btn-ghost",
+    style: {
+      padding: "9px 16px",
+      fontSize: "10px"
+    },
+    onClick: () => setScreen("home")
+  }, "Home")), gallery.length === 0 ? /*#__PURE__*/React.createElement("div", {
+    style: {
+      textAlign: "center",
+      paddingTop: 80
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    className: "label",
+    style: {
+      display: "block",
+      marginBottom: 20
+    }
+  }, "No portraits yet"), /*#__PURE__*/React.createElement("p", {
+    style: {
+      fontSize: 13,
+      fontWeight: 300,
+      color: "rgba(255,255,255,.3)",
+      marginBottom: 40,
+      lineHeight: 1.7
+    }
+  }, "Your iris portraits will appear here after capture."), /*#__PURE__*/React.createElement("button", {
+    className: "btn-cyan",
+    onClick: () => {
+      setShowNamePrompt(true);
+      setNameInput("");
+      setDisambigList(null);
+    }
+  }, "Begin Scan")) : /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "grid",
+      gridTemplateColumns: "repeat(auto-fill,minmax(120px,1fr))",
+      gap: 20
+    }
+  }, gallery.map((it, i) => /*#__PURE__*/React.createElement("div", {
+    key: i,
+    onClick: () => setExpanded(it),
+    style: {
+      cursor: "pointer",
+      textAlign: "center"
+    }
+  }, /*#__PURE__*/React.createElement("img", {
+    src: it.url,
+    alt: "",
+    style: {
+      width: "100%",
+      borderRadius: "50%",
+      display: "block",
+      border: "1px solid rgba(255,255,255,.06)"
+    }
+  }), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 11,
+      fontWeight: 500,
+      letterSpacing: ".1em",
+      textTransform: "uppercase",
+      color: "rgba(255,255,255,.6)",
+      marginTop: 10
+    }
+  }, it.seat === "admin" ? "Admin" : `Seat ${it.seat}`), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 5,
+      marginTop: 4
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      width: 5,
+      height: 5,
+      borderRadius: "50%",
+      background: SWATCH[it.color] || "#777",
+      flexShrink: 0
+    }
+  }), /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 9,
+      fontWeight: 500,
+      letterSpacing: ".14em",
+      textTransform: "uppercase",
+      color: "rgba(255,255,255,.3)"
+    }
+  }, it.color)))))), expanded && /*#__PURE__*/React.createElement("div", {
+    onClick: () => setExpanded(null),
+    style: {
+      position: "fixed",
+      inset: 0,
+      background: "rgba(0,0,0,.97)",
+      display: "flex",
+      flexDirection: "column",
+      alignItems: "center",
+      justifyContent: "center",
+      padding: 24,
+      zIndex: 30,
+      gap: 24
+    }
+  }, /*#__PURE__*/React.createElement("img", {
+    src: expanded.url,
+    alt: "",
+    style: {
+      maxWidth: "80vw",
+      maxHeight: "60vh",
+      borderRadius: "50%",
+      boxShadow: "0 0 0 1px rgba(255,255,255,.06)"
+    }
+  }), /*#__PURE__*/React.createElement("div", {
+    className: "display",
+    style: {
+      fontSize: 48,
+      color: "#fff"
+    }
+  }, expanded.seat === "admin" ? "Admin" : `Seat ${expanded.seat}`)), showNamePrompt && /*#__PURE__*/React.createElement("div", {
+    style: {
+      position: "fixed",
+      inset: 0,
+      background: "rgba(0,0,0,.92)",
+      backdropFilter: "blur(20px)",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      padding: 24,
+      zIndex: 50,
+      animation: "fadeIn 0.4s ease"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: "#0a0a0a",
+      border: "1px solid rgba(255,255,255,.08)",
+      padding: "44px 36px",
+      maxWidth: 400,
+      width: "100%",
+      textAlign: "center"
+    }
+  }, !disambigList ? /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
+    style: {
+      margin: "0 auto 22px",
+      width: 24,
+      height: 1,
+      background: C,
+      opacity: .7
+    }
+  }), /*#__PURE__*/React.createElement("span", {
+    className: "label",
+    style: {
+      display: "block",
+      marginBottom: 24,
+      color: C
+    }
+  }, "Identification"), /*#__PURE__*/React.createElement("p", {
+    className: "display",
+    style: {
+      fontSize: 28,
+      margin: "0 0 32px",
+      lineHeight: 1.1
+    }
+  }, "What's your", /*#__PURE__*/React.createElement("br", null), /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontStyle: "italic",
+      color: "rgba(255,255,255,.55)"
+    }
+  }, "name?")), /*#__PURE__*/React.createElement("input", {
+    className: "name-input",
+    type: "text",
+    value: nameInput,
+    onChange: e => setNameInput(e.target.value),
+    onKeyDown: e => {
+      if (e.key === "Enter") handleNameSubmit();
+    },
+    placeholder: "Full name",
+    autoFocus: true
+  }), /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginTop: 36,
+      display: "flex",
+      flexDirection: "column",
+      gap: 10
+    }
+  }, /*#__PURE__*/React.createElement("button", {
+    className: "btn-cyan",
+    style: {
+      width: "100%"
+    },
+    onClick: handleNameSubmit,
+    disabled: !nameInput.trim()
+  }, "Continue"), /*#__PURE__*/React.createElement("button", {
+    className: "btn-ghost",
+    style: {
+      width: "100%"
+    },
+    onClick: () => {
+      setShowNamePrompt(false);
+      setNameInput("");
+    }
+  }, "Cancel"))) : /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("span", {
+    className: "label",
+    style: {
+      display: "block",
+      marginBottom: 16,
+      color: C
+    }
+  }, "Which one?"), /*#__PURE__*/React.createElement("p", {
+    className: "display",
+    style: {
+      fontSize: 22,
+      margin: "0 0 28px",
+      fontStyle: "italic",
+      color: "rgba(255,255,255,.6)"
+    }
+  }, "We found a few matches"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginBottom: 20
+    }
+  }, disambigList.map((entry, i) => /*#__PURE__*/React.createElement("button", {
+    key: i,
+    className: "disambig-btn",
+    onClick: () => chooseDisambig(entry)
+  }, entry.name))), /*#__PURE__*/React.createElement("button", {
+    className: "btn-ghost",
+    style: {
+      width: "100%"
+    },
+    onClick: () => setDisambigList(null)
+  }, "Back")))), showExplainer && /*#__PURE__*/React.createElement("div", {
+    style: {
+      position: "fixed",
+      inset: 0,
+      background: "rgba(0,0,0,.88)",
+      backdropFilter: "blur(16px)",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      padding: 24,
+      zIndex: 40
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: "#0a0a0a",
+      border: "1px solid rgba(255,255,255,.08)",
+      padding: "44px 36px",
+      maxWidth: 320,
+      textAlign: "center",
+      width: "100%"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      margin: "0 auto 28px",
+      width: 44,
+      height: 44,
+      borderRadius: "50%",
+      border: `1px solid rgba(255,255,255,.15)`,
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center"
+    }
+  }, /*#__PURE__*/React.createElement("svg", {
+    width: "20",
+    height: "14",
+    viewBox: "0 0 20 14",
+    fill: "none"
+  }, /*#__PURE__*/React.createElement("path", {
+    d: "M1 7C1 7 4 1 10 1C16 1 19 7 19 7C19 7 16 13 10 13C4 13 1 7 1 7Z",
+    stroke: "rgba(255,255,255,0.5)",
+    strokeWidth: "1"
+  }), /*#__PURE__*/React.createElement("circle", {
+    cx: "10",
+    cy: "7",
+    r: "2.5",
+    stroke: "rgba(255,255,255,0.5)",
+    strokeWidth: "1"
+  }), /*#__PURE__*/React.createElement("circle", {
+    cx: "10",
+    cy: "7",
+    r: "0.8",
+    fill: "rgba(255,255,255,0.5)"
+  }))), /*#__PURE__*/React.createElement("span", {
+    className: "label",
+    style: {
+      display: "block",
+      marginBottom: 12
+    }
+  }, "Camera Required"), /*#__PURE__*/React.createElement("p", {
+    style: {
+      fontSize: 13,
+      fontWeight: 300,
+      lineHeight: 1.8,
+      color: "rgba(255,255,255,.45)",
+      margin: "0 0 36px"
+    }
+  }, "IrisLens uses your camera to capture your iris and locate your reserved seat."), /*#__PURE__*/React.createElement("button", {
+    className: "btn-cyan",
+    style: {
+      width: "100%",
+      marginBottom: 10
+    },
+    onClick: () => {
+      setShowExplainer(false);
+      setScreen("capture");
+    }
+  }, "Allow Camera"), /*#__PURE__*/React.createElement("button", {
+    className: "btn-ghost",
+    style: {
+      width: "100%"
+    },
+    onClick: () => setShowExplainer(false)
+  }, "Cancel"))));
+}
+ReactDOM.createRoot(document.getElementById("root")).render(React.createElement(IrisLens));
