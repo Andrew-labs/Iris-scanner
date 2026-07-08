@@ -123,6 +123,7 @@ var IrisLensBundle = (() => {
     const [nameInput, setNameInput] = useState("");
     const [disambigList, setDisambigList] = useState(null);
     const [currentGuest, setCurrentGuest] = useState(null);
+    const currentGuestRef = useRef(null);
     const [result, setResult] = useState(null);
     const [gallery, setGallery] = useState([]);
     const [expanded, setExpanded] = useState(null);
@@ -318,8 +319,8 @@ var IrisLensBundle = (() => {
         const item = {
           url: output,
           color: finalColor,
-          seat: currentGuest?.seat || "\u2014",
-          name: currentGuest?.name || null,
+          seat: currentGuestRef.current?.seat || "\u2014",
+          name: currentGuestRef.current?.name || null,
           date: (/* @__PURE__ */ new Date()).toLocaleDateString()
         };
         setResult(item);
@@ -330,6 +331,7 @@ var IrisLensBundle = (() => {
         setGenError(String(e.message || e));
       }
     }, [currentGuest]);
+    useEffect(() => { currentGuestRef.current = currentGuest; }, [currentGuest]);
     useEffect(() => {
       if (screen === "capture") startCamera();
       return () => {
