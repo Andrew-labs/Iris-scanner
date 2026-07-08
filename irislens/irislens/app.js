@@ -135,6 +135,12 @@ var IrisLensBundle = (() => {
     const lastIrisCropRef = useRef(null), lastEvidenceRef = useRef(null);
     const exposureCanvasRef = useRef(null);   // reused scratch canvas for exposure sampling
     const exposureRef = useRef({ ok: true, mean: 0, clipped: 0, checkedAt: 0 });
+    const alignStartRef = useRef(null);
+    // Enable live exposure logging with ?debug=1 in the URL
+    useEffect(() => {
+      try { if (new URLSearchParams(location.search).has("debug")) window.__irisDebug = true; } catch {}
+    }, []);
+
     const loadLandmarker = useCallback(async () => {
       if (landmarkerRef.current) return landmarkerRef.current;
       let v = window.visionTasks;
@@ -166,6 +172,8 @@ var IrisLensBundle = (() => {
         await loadLandmarker();
         capturedRef.current = false;
         holdStartRef.current = null;
+        alignStartRef.current = null;
+        exposureRef.current = { ok: true, mean: 0, clipped: 0, checkedAt: 0 };
         setHudState("searching");
         loop();
       } catch (e) {
@@ -216,10 +224,12 @@ var IrisLensBundle = (() => {
         }
         const mean = sum / n;
         const clippedFrac = clipped / n;
-        // Usable window: bright enough to carry colour, not blown out.
-        const ok = mean >= 62 && mean <= 210 && clippedFrac < 0.30;
+        // Usable window. The eye socket is naturally shadowed, so real-world means
+        // sit far lower than a full-frame average. Only reject genuinely unusable frames.
+        const ok = mean >= 28 && mean <= 232 && clippedFrac < 0.55;
         const state = { ok, mean, clipped: clippedFrac, checkedAt: now };
         exposureRef.current = state;
+        if (window.__irisDebug) console.log(`[exposure] mean=${mean.toFixed(1)} clipped=${(clippedFrac*100).toFixed(1)}% ok=${ok}`);
         return state;
       } catch {
         return prev;
@@ -243,6 +253,7 @@ var IrisLensBundle = (() => {
         setStatus("Position your eye within the ring");
         setHudState("searching");
         holdStartRef.current = null;
+        alignStartRef.current = null;
       } else {
         const pts = res.faceLandmarks[0], iris = R_IRIS.map((i) => pts[i]);
         const cx = iris.reduce((a, p) => a + p.x, 0) / 4, cy = iris.reduce((a, p) => a + p.y, 0) / 4;
@@ -252,26 +263,35 @@ var IrisLensBundle = (() => {
           setStatus("Centre your eye");
           setHudState("searching");
           holdStartRef.current = null;
+          alignStartRef.current = null;
         } else if (rad < 0.018) {
           setStatus("Move closer");
           setHudState("searching");
           holdStartRef.current = null;
+          alignStartRef.current = null;
         } else if (rad > 0.09) {
           setStatus("Move back slightly");
           setHudState("searching");
           holdStartRef.current = null;
+          alignStartRef.current = null;
         } else if (dist > ALIGN_TOL) {
           setStatus("Align to centre");
           setHudState("aligning");
           holdStartRef.current = null;
+          alignStartRef.current = null;
         } else {
-          // Aligned. Now check the raw frame is well-exposed before we commit.
+          // Aligned. Check the raw frame is usable before we commit.
           const exp = measureExposure(video, cx, cy, rad);
-          if (!exp.ok) {
+          if (!alignStartRef.current) alignStartRef.current = performance.now();
+          const alignedFor = performance.now() - alignStartRef.current;
+          // Safety net: after 3s of good alignment, capture regardless of exposure.
+          // A mediocre frame beats a scan that never fires.
+          const forceCapture = alignedFor > 3000;
+          if (!exp.ok && !forceCapture) {
             holdStartRef.current = null;
             setHudState("aligning");
-            if (exp.mean < 62) setStatus("More light needed");
-            else if (exp.mean > 210 || exp.clipped >= 0.30) setStatus("Too bright \u2014 turn away from the light");
+            if (exp.mean < 28) setStatus("More light needed");
+            else if (exp.mean > 232 || exp.clipped >= 0.55) setStatus("Too bright \u2014 turn away from the light");
             else setStatus("Adjust your lighting");
             rafRef.current = requestAnimationFrame(loop);
             return;
