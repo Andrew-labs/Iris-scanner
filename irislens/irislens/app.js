@@ -16,7 +16,7 @@ var IrisLensBundle = (() => {
     { seat: "4", name: "Chelsea Jonathan" },
     { seat: "5", name: "Amy Lee Steenkamp" },
     { seat: "6", name: "Margot Rothman" },
-    { seat: "7", name: "Zo\xEB Parker" },
+    { seat: "7", name: "Gert Jordaan" },
     { seat: "8", name: "Joloving" },
     { seat: "9", name: "Monica van der Walt" },
     { seat: "10", name: "Anele Geqiwe" },
