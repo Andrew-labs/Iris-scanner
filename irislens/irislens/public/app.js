@@ -4,10 +4,9 @@ var IrisLensBundle = (() => {
   const MODEL_URL = "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task";
   const R_IRIS = [469, 470, 471, 472];
   const IS_MOBILE = typeof navigator !== "undefined" && /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
-  // Phones run the detection loop slower, so a long hold window is hard to satisfy.
-  const HOLD_MS = IS_MOBILE ? 800 : 1200;
-  const ALIGN_TOL = IS_MOBILE ? 0.14 : 0.1;
-  const EXP_N = IS_MOBILE ? 24 : 48;   // exposure sample grid; smaller = cheaper on phones
+  const HOLD_MS = 1200;
+  const ALIGN_TOL = 0.1;
+  const EXP_N = 48;
   const CROP = 512;
   const BRAND_BG = "/assets/hero.jpg";
   const BRAND_DNA = "/assets/icy_blue_dna_helix_in_focus.png";
@@ -175,18 +174,7 @@ var IrisLensBundle = (() => {
     const startCamera = useCallback(async () => {
       setPermError(null);
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: {
-            facingMode: "user",
-            // Request a square-ish stream so portrait phones and landscape webcams
-            // both yield an aspect close to 1. This keeps the normalised landmark
-            // maths consistent and stops objectFit:cover from cropping the eye out.
-            width: { ideal: 960 },
-            height: { ideal: 960 },
-            frameRate: { ideal: 30, max: 30 }
-          },
-          audio: false
-        });
+        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user", width: { ideal: 1280 }, height: { ideal: 720 } }, audio: false });
         streamRef.current = stream;
         if (videoRef.current) {
           videoRef.current.srcObject = stream;
@@ -218,9 +206,12 @@ var IrisLensBundle = (() => {
     // Measure exposure from the RAW video frame (CSS filters do not affect this).
     // Samples a small square around the iris. Throttled to ~4x/sec.
     const measureExposure = (video, ncx, ncy, nrad) => {
+      // On mobile, skip entirely. The check is advisory, and a synchronous
+      // getImageData every 250ms starves the MediaPipe detection loop on phones.
+      if (IS_MOBILE) return { ok: true, mean: 0, clipped: 0, checkedAt: 0 };
       const now = performance.now();
       const prev = exposureRef.current;
-      if (now - prev.checkedAt < (IS_MOBILE ? 500 : 250)) return prev;
+      if (now - prev.checkedAt < 250) return prev;
 
       if (!exposureCanvasRef.current) {
         exposureCanvasRef.current = document.createElement("canvas");
@@ -284,30 +275,18 @@ var IrisLensBundle = (() => {
         alignStartRef.current = null;
       } else {
         const pts = res.faceLandmarks[0], iris = R_IRIS.map((i) => pts[i]);
+
+        const cx = iris.reduce((a, p) => a + p.x, 0) / 4, cy = iris.reduce((a, p) => a + p.y, 0) / 4;
+        const rad = Math.max(...iris.map((p) => Math.hypot(p.x - cx, p.y - cy)));
+        const dist = Math.hypot(cx - 0.5, cy - 0.5);
         if (window.__irisDebug) {
           const nowD = performance.now();
           if (!window.__lastDbg || nowD - window.__lastDbg > 400) {
             window.__lastDbg = nowD;
-            setTimeout(() => {
-              const _cx = iris.reduce((a,p)=>a+p.x,0)/4, _cy = iris.reduce((a,p)=>a+p.y,0)/4;
-              const _asp = (video.videoHeight||1)/(video.videoWidth||1);
-              const _rad = Math.max(...iris.map(p=>Math.hypot(p.x-_cx,(p.y-_cy)*_asp)));
-              const _dist = Math.hypot(_cx-0.5,(_cy-0.5)*_asp);
-              console.log(`[detect] rad=${_rad.toFixed(4)} dist=${_dist.toFixed(4)} cx=${_cx.toFixed(3)} cy=${_cy.toFixed(3)} asp=${_asp.toFixed(3)} | gates: rad 0.018-0.09, dist<${ALIGN_TOL}`);
-            }, 0);
+            const verdict = dist > ALIGN_TOL * 1.6 ? "CENTRE" : rad < 0.018 ? "CLOSER" : rad > 0.09 ? "BACK" : dist > ALIGN_TOL ? "ALIGN" : "HOLDING";
+            console.log(`[detect] rad=${rad.toFixed(4)} dist=${dist.toFixed(4)} -> ${verdict}  (gates: rad 0.018-0.09, dist<${ALIGN_TOL})`);
           }
         }
-        const cx = iris.reduce((a, p) => a + p.x, 0) / 4, cy = iris.reduce((a, p) => a + p.y, 0) / 4;
-        // MediaPipe normalises x against frame WIDTH and y against frame HEIGHT.
-        // Naively mixing them makes `rad` shrink on portrait phone frames, which
-        // strands the user on "Move closer" forever. Work in pixels, then
-        // re-normalise against width so the thresholds keep their original meaning.
-        const vwN = video.videoWidth || 1, vhN = video.videoHeight || 1;
-        const aspect = vhN / vwN;
-        const rad = Math.max(...iris.map((p) => Math.hypot(p.x - cx, (p.y - cy) * aspect)));
-        // The <video> is objectFit:cover, so the visible centre is not necessarily
-        // the frame centre. Measure distance in the same aspect-corrected space.
-        const dist = Math.hypot(cx - 0.5, (cy - 0.5) * aspect);
         if (dist > ALIGN_TOL * 1.6) {
           setStatus("Centre your eye");
           setHudState("searching");
