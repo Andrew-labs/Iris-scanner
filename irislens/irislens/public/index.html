@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0, user-scalable=no"/>
+<title>iS Clinical Eye Scan</title>
+<style>
+  html,body{margin:0;padding:0;background:#071432;min-height:100%;}
+  #root{min-height:100vh;}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="module">
+  try {
+    const v = await import("https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.18");
+    window.visionTasks = v;
+    window.dispatchEvent(new Event("mp-ready"));
+  } catch (e) {
+    console.error("MediaPipe load failed:", e);
+  }
+</script>
+<script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="/app.js"></script>
+</body>
+</html>
