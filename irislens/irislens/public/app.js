@@ -4,8 +4,8 @@ var IrisLensBundle = (() => {
   const MODEL_URL = "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task";
   const R_IRIS = [469, 470, 471, 472];
   const IS_MOBILE = typeof navigator !== "undefined" && /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
-  const HOLD_MS = 1200;
-  const ALIGN_TOL = 0.1;
+  const HOLD_MS = 900;
+  const ALIGN_TOL = 0.15;
   const EXP_N = 48;
   const CROP = 512;
   const BRAND_BG = "/assets/hero.jpg";
@@ -32,7 +32,7 @@ var IrisLensBundle = (() => {
     { seat: "18", name: "Sera Harper" },
     { seat: "19", name: "Amy Willcock" },
     { seat: "20", name: "Lee Willcock" },
-    { seat: "21", name: "Monica Kantani" },
+    { seat: "21", name: "Dr. Monica Kantani" },
     { seat: "22", name: "Dourina Ritchewaldt" },
     { seat: "admin", name: "Andrew" },
     { seat: "admin", name: "Dirkie" },
@@ -283,7 +283,7 @@ var IrisLensBundle = (() => {
           const nowD = performance.now();
           if (!window.__lastDbg || nowD - window.__lastDbg > 400) {
             window.__lastDbg = nowD;
-            const verdict = dist > ALIGN_TOL * 1.6 ? "CENTRE" : rad < 0.018 ? "CLOSER" : rad > 0.09 ? "BACK" : dist > ALIGN_TOL ? "ALIGN" : "HOLDING";
+            const verdict = dist > ALIGN_TOL * 1.6 ? "CENTRE" : rad < 0.014 ? "CLOSER" : rad > 0.12 ? "BACK" : dist > ALIGN_TOL ? "ALIGN" : "HOLDING";
             console.log(`[detect] rad=${rad.toFixed(4)} dist=${dist.toFixed(4)} -> ${verdict}  (gates: rad 0.018-0.09, dist<${ALIGN_TOL})`);
           }
         }
@@ -292,12 +292,12 @@ var IrisLensBundle = (() => {
           setHudState("searching");
           holdStartRef.current = null;
           alignStartRef.current = null;
-        } else if (rad < 0.018) {
+        } else if (rad < 0.014) {
           setStatus("Move closer");
           setHudState("searching");
           holdStartRef.current = null;
           alignStartRef.current = null;
-        } else if (rad > 0.09) {
+        } else if (rad > 0.12) {
           setStatus("Move back slightly");
           setHudState("searching");
           holdStartRef.current = null;
