@@ -32,7 +32,7 @@ var IrisLensBundle = (() => {
     { seat: "18", name: "Sera Harper" },
     { seat: "19", name: "Amy Willcock" },
     { seat: "20", name: "Lee Willcock" },
-    { seat: "21", name: "Dr. Monica Kantani" },
+    { seat: "21", name: "Monica Kantani" },
     { seat: "22", name: "Dourina Ritchewaldt" },
     { seat: "admin", name: "Andrew" },
     { seat: "admin", name: "Dirkie" },
